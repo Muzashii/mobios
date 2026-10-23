@@ -4,13 +4,13 @@ import { writeOBJ } from '../io/obj';
 import { writeSTL } from '../io/stl';
 import { write3MF } from '../io/threemf';
 import { calibrationPieces, exampleFigure } from './primitives';
-import { suggestSmartCut } from './smartcut';
+import { clusterSeeds, regionContext, suggestRegion } from './smartcut';
 import { planAutoSplit, type AutoSplitPlan } from './autosplit';
 import { analyzePrintability, suggestOrientation, type OrientationSuggestion } from './printability';
 import { toDisplayMesh } from './display';
 import { Engine } from './engine';
 import { manifoldToMeshData, meshDataToManifold, repairMesh } from './repair';
-import type { DisplayMesh, SmartCutSuggestion, Vec3, EvalResult, ExportFormat, ExportPart, ImportedMesh, MeshData, Operation, SourceRef, Technology } from './types';
+import type { CutCheck, CutOperation, DisplayMesh, SmartCutSuggestion, Vec3, EvalResult, ExportFormat, ExportPart, ImportedMesh, MeshData, Operation, SourceRef, Technology } from './types';
 import type { Wasm } from './wasm';
 
 /** Rotates a mesh so `down` points to −Z and rests it on z = 0 (print orientation). */
@@ -106,23 +106,52 @@ export class GeometryService {
     return m ? toDisplayMesh(manifoldToMeshData(m)) : null;
   }
 
-  /** SmartCut: suggested bounded plane separating the seeded region (state before `beforeOp` when editing). */
-  smartCut(partId: string, seeds: Vec3[], seedRadius: number, beforeOp?: string): SmartCutSuggestion {
+  /** SmartCut: candidates separating the seeded region (state before `beforeOp` when editing). */
+  smartCut(partId: string, seeds: Vec3[], seedRadius: number, beforeOp?: string, negSeeds?: Vec3[]): SmartCutSuggestion {
     const m = this.engine.part(partId, beforeOp);
     if (!m) throw new Error('Parte não encontrada.');
-    return this.smartCutOn(m, seeds, seedRadius);
+    return this.smartCutOn(m, seeds, seedRadius, negSeeds);
   }
 
-  smartCutOn(m: Manifold, seeds: Vec3[], seedRadius: number): SmartCutSuggestion {
-    // Coarse CAD meshes (long thin triangles) hide creases: resample them evenly first.
-    const box = m.boundingBox();
-    const diag = Math.hypot(box.max[0] - box.min[0], box.max[1] - box.min[1], box.max[2] - box.min[2]);
-    const dense = m.numTri() < 150_000 ? m.refineToLength(diag / 120) : null;
+  /**
+   * One suggestion per cluster of seeds: dabs on the head and on a hand become two cuts.
+   * Clusters that fail come back as `{ error }` so the others still apply.
+   */
+  smartCutClusters(partId: string, seeds: Vec3[], seedRadius: number, negSeeds?: Vec3[], beforeOp?: string): ({ suggestion: SmartCutSuggestion } | { error: string; seeds: Vec3[] })[] {
+    const m = this.engine.part(partId, beforeOp);
+    if (!m) throw new Error('Parte não encontrada.');
+    return clusterSeeds(seeds, seedRadius).map((group) => {
+      try {
+        return { suggestion: this.smartCutOn(m, group, seedRadius, negSeeds) };
+      } catch (e) {
+        return { error: e instanceof Error ? e.message : String(e), seeds: group };
+      }
+    });
+  }
+
+  smartCutOn(m: Manifold, seeds: Vec3[], seedRadius: number, negSeeds?: Vec3[]): SmartCutSuggestion {
+    return suggestRegion(regionContext(m, 'suggest'), seeds, seedRadius, { negSeeds });
+  }
+
+  /**
+   * Hover preview: the part SmartCut would separate if the user clicked here. Only the best
+   * candidate, on the cached analysis proxy (fast enough to follow the mouse).
+   */
+  smartHover(partId: string, point: Vec3, seedRadius: number): { preview: Float32Array; loops: Vec3[][]; name?: string; confidence: number } | null {
+    const m = this.engine.part(partId);
+    if (!m) return null;
     try {
-      return suggestSmartCut(manifoldToMeshData(dense ?? m), seeds, seedRadius);
-    } finally {
-      dense?.delete();
+      const s = suggestRegion(regionContext(m, 'suggest'), [point], seedRadius, { maxCandidates: 1 });
+      const c = s.candidates[0];
+      return { preview: c.preview, loops: c.loops, name: c.name, confidence: c.confidence };
+    } catch {
+      return null;
     }
+  }
+
+  /** Dry-run of a cut while it is being edited (pre-validation, never commits). */
+  checkCut(op: CutOperation, beforeOp?: string): CutCheck {
+    return this.engine.checkCut(op, beforeOp);
   }
 
   /** Overhangs, base and thin walls of a part as it sits now. */

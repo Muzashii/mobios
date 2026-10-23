@@ -135,12 +135,14 @@ export interface ConnectorResult {
 export interface JointGeometry {
   plane: Plane;
   bounded?: SphereBounds;
+  /** Curved SmartCut joint: only this disc around the plane origin is flat. */
+  faceRadius?: number;
 }
 
 /** Islands of the cut face in plane-local 2D coordinates. */
-export function jointFaceIslands(b: Manifold, joint: JointGeometry) {
+export function jointFaceIslands(b: Manifold, joint: JointGeometry, wasm?: Wasm) {
   const frame = planeFrame(joint.plane);
-  const section = faceSection(b, frame.toLocal);
+  const section = faceSection(b, frame.toLocal, joint.faceRadius, wasm);
   const islands = section.decompose().map((cs) => {
     const polys = cs.toPolygons() as Vec2[][];
     const area = cs.area();
@@ -191,7 +193,7 @@ export function sweepOverlap(a: Manifold, b: Manifold, dir: Vec3, travel: number
  * assembled along the insertion direction without collisions.
  */
 export function applyConnector(wasm: Wasm, a: Manifold, b: Manifold, joint: JointGeometry, type: ConnectorType, p: ConnectorParams): ConnectorResult {
-  const { islands, frame } = jointFaceIslands(b, joint);
+  const { islands, frame } = jointFaceIslands(b, joint, wasm);
   if (islands.length === 0) throw new Error('Face de corte não encontrada para este encaixe.');
   const res = type === 'dovetail' ? dovetail(wasm, a, b, islands, frame, p) : pegs(wasm, a, b, islands, frame, type, p);
 

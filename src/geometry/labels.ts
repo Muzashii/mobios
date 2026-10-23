@@ -61,7 +61,7 @@ export function engraveLabel(
   size: number,
   depth: number,
 ): { a: Manifold; b: Manifold; size: number } {
-  const { islands, frame } = jointFaceIslands(b, joint);
+  const { islands, frame } = jointFaceIslands(b, joint, wasm);
   if (!islands.length) throw new Error('Face de corte não encontrada para a numeração.');
   const island = islands.reduce((x, y) => (y.area > x.area ? y : x));
 
