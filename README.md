@@ -71,7 +71,7 @@ E nada é destrutivo: todo corte fica num histórico editável. Mudou de ideia s
 
 ## Tudo o que ele faz
 
-| | |
+| Etapa | O que você pode fazer |
 |---|---|
 | **Importar** | STL (binário e ASCII), OBJ e 3MF multi-objeto, arrastando o arquivo. **Reparo automático** de malhas quebradas — vértices soltos, faces duplicadas, normais invertidas, buracos, cascas sobrepostas — com relatório do que foi corrigido. Aviso de escala suspeita (polegadas/metros). |
 | **Cortar** | Plano com gizmo e valores numéricos · **corte limitado** a uma esfera · **SmartCut** por pincel · **curva livre** desenhada na tela · perfis de junta **degrau, zigue-zague e onda**. |
@@ -128,7 +128,7 @@ Todas as decisões de arquitetura estão registradas em [`docs/ADR`](docs/ADR), 
 
 ## Qualidade em números
 
-| | |
+| Aspecto | Resultado |
 |---|---|
 | **Lighthouse** | Desktop **100 · 100 · 100 · 100** — celular **93 · 100 · 100 · 100** (desempenho, acessibilidade, boas práticas, SEO) |
 | **Testes** | 66 testes automatizados, incluindo testes de propriedade (120 cortes aleatórios por execução conservam volume e geram malhas fechadas) |
