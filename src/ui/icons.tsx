@@ -43,6 +43,16 @@ export const IconBrush = make(
     <path d="M3 21c1.5 0 3-.5 3-2" />
   </>,
 );
+export const IconHash = make(<path d="M5 9h14M5 15h14M10 4L8 20M16 4l-2 16" />);
+export const IconPlay = make(<path d="M7 4l13 8-13 8z" />);
+export const IconPause = make(<path d="M7 4v16M17 4v16" />);
+export const IconAssembly = make(
+  <>
+    <rect x="3" y="13" width="8" height="8" rx="1" />
+    <rect x="13" y="3" width="8" height="8" rx="1" />
+    <path d="M11 13l2-2M14 15h3a2 2 0 0 0 2-2v-1" />
+  </>,
+);
 export const IconPen = make(<path d="M3 17c3-6 6 2 9-4s5-6 9-6M3 21h18" />);
 export const IconPaint = make(
   <>

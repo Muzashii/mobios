@@ -28,6 +28,10 @@ export interface CutDraft {
   bounded: boolean;
   radius: number;
   connector: ConnectorDraft;
+  /** Engrave the joint number on both faces. */
+  label: boolean;
+  /** Existing label operation on this joint, if any. */
+  labelOpId?: string;
   /** Set when editing an existing cut. */
   editingOpId?: string;
   /** Existing connector operation on this joint, if any. */
@@ -43,6 +47,7 @@ export interface ViewPart {
   geometry: BufferGeometry;
   stats: PartStats;
   producedBy?: string;
+  lineage: string[];
   autoColor: string;
 }
 
@@ -70,6 +75,9 @@ interface UIState {
   /** Connector operation open in the inspector. */
   connectorEdit: string | null;
   explode: number;
+  /** Assembly simulation progress (0 = apart, 1 = assembled); null = off. */
+  assembly: number | null;
+  assemblyPlaying: boolean;
   parts: ViewPart[];
   joints: JointInfo[];
   reports: Record<string, OpReport>;
@@ -96,6 +104,8 @@ export const useUI = create<UIState>(() => ({
   draft: null,
   connectorEdit: null,
   explode: 0,
+  assembly: null,
+  assemblyPlaying: false,
   parts: [],
   joints: [],
   reports: {},

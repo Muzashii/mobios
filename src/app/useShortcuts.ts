@@ -55,7 +55,7 @@ export function useShortcuts() {
         setUI({ selection: null, connectorEdit: null, tool: 'select' });
         return;
       }
-      const single: Record<string, string> = { c: 'cut', s: 'smartcut', b: 'brush', l: 'draw', t: 'paint', v: 'select', e: 'explode', f: 'focus', h: 'hide' };
+      const single: Record<string, string> = { c: 'cut', s: 'smartcut', b: 'brush', l: 'draw', t: 'paint', v: 'select', e: 'explode', f: 'focus', h: 'hide', m: 'assembly' };
       if (single[key]) {
         e.preventDefault();
         runCommand(single[key]);

@@ -31,7 +31,12 @@ export interface SphereBounds {
 
 export type Technology = 'FDM' | 'RESINA';
 
-export type ConnectorType = 'pin' | 'dowel';
+/**
+ * pin/square/hex/key: male peg on one side, socket on the other (square/hex/key lock rotation,
+ * key also forces a single orientation). dowel: sockets on both sides + loose pins.
+ * magnet: sockets for magnets on both sides. dovetail: sliding rail across the face.
+ */
+export type ConnectorType = 'pin' | 'square' | 'hex' | 'key' | 'dowel' | 'magnet' | 'dovetail';
 
 export interface ConnectorParams {
   /** Pin diameter (mm). */
@@ -75,7 +80,8 @@ export interface StrokeFrame {
 export type Operation =
   | { kind: 'cut-plane'; id: string; target: PartId; plane: Plane; bounded?: SphereBounds; profile?: CutProfile }
   | { kind: 'cut-surface'; id: string; target: PartId; frame: StrokeFrame; points: Vec2[]; flip?: boolean }
-  | { kind: 'connector'; id: string; joint: string; type: ConnectorType; params: ConnectorParams };
+  | { kind: 'connector'; id: string; joint: string; type: ConnectorType; params: ConnectorParams }
+  | { kind: 'label'; id: string; joint: string; size: number; depth: number };
 
 export type CutOperation = Extract<Operation, { kind: 'cut-plane' | 'cut-surface' }>;
 
@@ -114,6 +120,8 @@ export interface PartResult {
   stats: PartStats;
   /** Operation that produced the part (undefined for sources). */
   producedBy?: string;
+  /** Joint sides this part descends from, e.g. ["c1.b", "c3.a"] (assembly simulation). */
+  lineage: string[];
 }
 
 export interface JointInfo {
@@ -126,6 +134,12 @@ export interface JointInfo {
   label: string;
   /** Connectors need a flat, unprofiled face. */
   planar: boolean;
+  /** Direction part B travels to come off part A (assembly simulation). */
+  insertDir: Vec3;
+  /** Connector footprints on the face (plane-frame 2D), kept clear by labels. */
+  obstacles: { c: Vec2; r: number }[];
+  /** Result of the insertion sweep check, when a connector exists. */
+  assemblyClear?: boolean;
 }
 
 export interface OpReport {

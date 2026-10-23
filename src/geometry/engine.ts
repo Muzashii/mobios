@@ -1,12 +1,13 @@
 import type { Manifold } from 'manifold-3d';
 import { partStats } from './analysis';
-import { applyConnector } from './connectors';
+import { applyConnector, CONNECTOR_TYPES } from './connectors';
+import { engraveLabel } from './labels';
 import { CutError, cutByPlane, faceSection } from './cut';
 import { toDisplayMesh } from './display';
 import { planeFrame } from './math';
 import { manifoldToMeshData } from './repair';
 import { cutByCutter, cutterReach, profileCutter, strokeCutter } from './cutters';
-import type { CutOperation, EvalResult, JointInfo, Operation, OpReport, PartId, PartResult, PartStats, Plane, SourceRef } from './types';
+import type { CutOperation, EvalResult, JointInfo, Operation, OpReport, PartId, PartResult, PartStats, Plane, SourceRef, Vec3 } from './types';
 import type { Wasm } from './wasm';
 
 interface PartState {
@@ -15,6 +16,7 @@ interface PartState {
   version: number;
   producedBy?: string;
   stats?: PartStats;
+  lineage: string[];
 }
 
 interface State {
@@ -74,7 +76,7 @@ export class Engine {
       const parts = new Map<PartId, PartState>();
       for (const s of sources) {
         const src = this.sources.get(s.id);
-        if (src) parts.set(s.id, { m: src.m, name: s.name, version: src.version });
+        if (src) parts.set(s.id, { m: src.m, name: s.name, version: src.version, lineage: [] });
       }
       this.base = { parts, joints: new Map() };
     }
@@ -92,7 +94,7 @@ export class Engine {
     const parts: PartResult[] = [];
     for (const [id, p] of final.parts) {
       p.stats ??= partStats(p.m);
-      const r: PartResult = { id, name: p.name, version: p.version, stats: p.stats, producedBy: p.producedBy };
+      const r: PartResult = { id, name: p.name, version: p.version, stats: p.stats, producedBy: p.producedBy, lineage: p.lineage };
       if (this.sent.get(id) !== p.version) {
         r.mesh = toDisplayMesh(manifoldToMeshData(p.m));
         this.sent.set(id, p.version);
@@ -125,7 +127,7 @@ export class Engine {
   private apply(prev: State, op: Operation): Step {
     const key = JSON.stringify(op);
     try {
-      const state = op.kind === 'connector' ? this.applyConnector(prev, op) : this.applyCut(prev, op);
+      const state = op.kind === 'connector' ? this.applyConnector(prev, op) : op.kind === 'label' ? this.applyLabel(prev, op) : this.applyCut(prev, op);
       return { key, opId: op.id, state: state.state, report: { warnings: state.warnings, info: state.info } };
     } catch (e) {
       const message = e instanceof CutError || e instanceof Error ? e.message : String(e);
@@ -140,22 +142,29 @@ export class Engine {
       const res = cutByCutter(this.wasm, target, cutter);
       cutter.delete();
       const { a, b } = op.flip ? { a: res.b, b: res.a } : res;
-      return { a, b, planar: false, plane: { origin: op.frame.origin, normal: op.frame.u } as Plane };
+      // B lies left of the stroke: it comes off along the stroke's left normal (mid-point).
+      const i = Math.max(1, Math.floor(op.points.length / 2));
+      const p0 = op.points[i - 1], p1 = op.points[Math.min(i, op.points.length - 1)];
+      const len = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) || 1;
+      const lx = -(p1[1] - p0[1]) / len, ly = (p1[0] - p0[0]) / len;
+      const sign = op.flip ? -1 : 1;
+      const dir = [0, 1, 2].map((k) => sign * (op.frame.u[k] * lx + op.frame.v[k] * ly)) as Vec3;
+      return { a, b, planar: false, plane: { origin: op.frame.origin, normal: dir } as Plane, insertDir: dir };
     }
     if (op.profile && op.profile.amplitude > 0) {
       if (op.bounded) throw new CutError('Corte limitado ainda não combina com perfil (degrau/zigue-zague/onda).');
       const cutter = profileCutter(this.wasm, op.plane, op.profile, cutterReach(target));
       const res = cutByCutter(this.wasm, target, cutter);
       cutter.delete();
-      return { ...res, planar: false, plane: op.plane };
+      return { ...res, planar: false, plane: op.plane, insertDir: op.plane.normal };
     }
-    return { ...cutByPlane(this.wasm, target, op.plane, op.bounded), planar: true, plane: op.plane };
+    return { ...cutByPlane(this.wasm, target, op.plane, op.bounded), planar: true, plane: op.plane, insertDir: op.plane.normal };
   }
 
   private applyCut(prev: State, op: CutOperation) {
     const target = prev.parts.get(op.target);
     if (!target) throw new Error('A parte alvo deste corte não existe mais.');
-    const { a, b, planar, plane } = this.cutGeometry(target.m, op);
+    const { a, b, planar, plane, insertDir } = this.cutGeometry(target.m, op);
     const ids = cutPartIds(op.id);
     const fromSource = this.sources.has(op.target);
     const parts = new Map<PartId, PartState>();
@@ -164,8 +173,8 @@ export class Engine {
         parts.set(id, p);
         continue;
       }
-      parts.set(ids.a, { m: a, name: childName(target.name, 'a', fromSource), version: this.versionSeq++, producedBy: op.id });
-      parts.set(ids.b, { m: b, name: childName(target.name, 'b', fromSource), version: this.versionSeq++, producedBy: op.id });
+      parts.set(ids.a, { m: a, name: childName(target.name, 'a', fromSource), version: this.versionSeq++, producedBy: op.id, lineage: [...target.lineage, ids.a] });
+      parts.set(ids.b, { m: b, name: childName(target.name, 'b', fromSource), version: this.versionSeq++, producedBy: op.id, lineage: [...target.lineage, ids.b] });
     }
     let faceArea: number;
     if (planar) {
@@ -179,7 +188,7 @@ export class Engine {
     const cutCount = [...prev.joints.values()].length + 1;
     const joints = new Map(prev.joints);
     const label = `J${cutCount}`;
-    joints.set(op.id, { id: op.id, a: ids.a, b: ids.b, plane, bounded: op.kind === 'cut-plane' ? op.bounded : undefined, faceArea, label, planar });
+    joints.set(op.id, { id: op.id, a: ids.a, b: ids.b, plane, bounded: op.kind === 'cut-plane' ? op.bounded : undefined, faceArea, label, planar, insertDir, obstacles: [] });
     return { state: { parts, joints }, warnings: [] as string[], info: `${faceArea.toFixed(0)} mm² de face` };
   }
 
@@ -203,10 +212,32 @@ export class Engine {
       else parts.set(id, p);
     }
     if (res.pins) {
-      parts.set(pinsPartId(op.id), { m: res.pins, name: `Pinos ${joint.label}`, version: this.versionSeq++, producedBy: op.id });
+      parts.set(pinsPartId(op.id), { m: res.pins, name: `Pinos ${joint.label}`, version: this.versionSeq++, producedBy: op.id, lineage: [`${op.joint}.pins`] });
     }
-    const noun = op.type === 'pin' ? 'pino(s)' : 'pino(s) solto(s)';
-    return { state: { parts, joints: prev.joints }, warnings: [...new Set(res.warnings)], info: `${res.placed} ${noun}` };
+    const clear = res.sweepOverlap < 0.01;
+    const joints = new Map(prev.joints);
+    joints.set(joint.id, { ...joint, insertDir: res.insertDir, obstacles: [...joint.obstacles, ...res.obstacles], assemblyClear: clear });
+    const warnings = [...new Set(res.warnings)];
+    if (!clear) warnings.push(`Colisão na montagem simulada (${res.sweepOverlap.toFixed(2)} mm³): aumente a folga.`);
+    const label = CONNECTOR_TYPES.find((t) => t.value === op.type)?.label.toLowerCase() ?? op.type;
+    return { state: { parts, joints }, warnings, info: `${res.placed}× ${label}${clear ? ' · montagem sem colisão ✓' : ''}` };
+  }
+
+  private applyLabel(prev: State, op: Extract<Operation, { kind: 'label' }>) {
+    const joint = prev.joints.get(op.joint);
+    if (!joint) throw new Error('O corte desta numeração não existe mais.');
+    if (!joint.planar) throw new Error('A numeração precisa de uma face plana.');
+    const a = prev.parts.get(joint.a), b = prev.parts.get(joint.b);
+    if (!a || !b) throw new Error('As partes desta junta foram cortadas depois; mova a numeração para logo após o corte.');
+    const res = engraveLabel(this.wasm, a.m, b.m, joint, joint.label, op.size, op.depth);
+    const parts = new Map<PartId, PartState>();
+    for (const [id, p] of prev.parts) {
+      if (id === joint.a) parts.set(id, { ...p, m: res.a, version: this.versionSeq++, stats: undefined });
+      else if (id === joint.b) parts.set(id, { ...p, m: res.b, version: this.versionSeq++, stats: undefined });
+      else parts.set(id, p);
+    }
+    const warnings = res.size < op.size - 1e-6 ? [`Texto reduzido para ${res.size.toFixed(1)} mm para caber na face.`] : [];
+    return { state: { parts, joints: prev.joints }, warnings, info: `"${joint.label}" gravado nas duas faces` };
   }
 
   private referenced(states: State[]) {

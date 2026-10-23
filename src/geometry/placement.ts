@@ -145,3 +145,42 @@ export function placeConnectors(polygons: Vec2[][], opts: PlacementOptions): Vec
   }
   return chosen;
 }
+
+/** Unit direction of the longest extent of a face (PCA of its raster). */
+export function islandAxis(polygons: Vec2[][]): Vec2 {
+  const r = distanceField(polygons, 96);
+  let n = 0, mx = 0, my = 0;
+  for (let j = 0; j < r.height; j++) for (let i = 0; i < r.width; i++) if (r.dist[j * r.width + i] > 0) { n++; mx += i; my += j; }
+  if (!n) return [1, 0];
+  mx /= n; my /= n;
+  let sxx = 0, syy = 0, sxy = 0;
+  for (let j = 0; j < r.height; j++) for (let i = 0; i < r.width; i++) {
+    if (r.dist[j * r.width + i] <= 0) continue;
+    const dx = i - mx, dy = j - my;
+    sxx += dx * dx; syy += dy * dy; sxy += dx * dy;
+  }
+  const angle = 0.5 * Math.atan2(2 * sxy, sxx - syy);
+  return [Math.cos(angle), Math.sin(angle)];
+}
+
+/**
+ * Best spot for an engraved label: as deep inside the face as possible while keeping
+ * `halfSize` (+ margin) away from the edge and from every connector footprint.
+ * Returns null when nothing fits.
+ */
+export function placeLabel(polygons: Vec2[][], obstacles: { c: Vec2; r: number }[], halfSize: number): Vec2 | null {
+  if (!polygons.some((p) => p.length >= 3)) return null;
+  const r = distanceField(polygons);
+  let best: Vec2 | null = null, bestScore = -Infinity;
+  for (let idx = 0; idx < r.dist.length; idx++) {
+    const edge = r.dist[idx];
+    if (edge < halfSize) continue;
+    const x = r.originX + ((idx % r.width) + 0.5) * r.cell;
+    const y = r.originY + (Math.floor(idx / r.width) + 0.5) * r.cell;
+    let clear = edge;
+    for (const o of obstacles) clear = Math.min(clear, Math.hypot(x - o.c[0], y - o.c[1]) - o.r);
+    if (clear < halfSize) continue;
+    if (clear > bestScore) { bestScore = clear; best = [x, y]; }
+  }
+  return best;
+}

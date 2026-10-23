@@ -15,7 +15,7 @@ npm run build        # typecheck + build de produção
 npx playwright install chromium && npm run e2e   # E2E com screenshot
 ```
 
-## O que já faz (Fases 0–5 + extras)
+## O que já faz (Fases 0–6 + extras)
 
 | Área | Recursos |
 |---|---|
@@ -23,9 +23,9 @@ npx playwright install chromium && npm run e2e   # E2E com screenshot
 | Cortar | Plano com gizmo (mover/girar), alinhar a X/Y/Z, posição/ângulos numéricos, **preview fantasma ao vivo**; **corte limitado** (separa só a ilha dentro de uma esfera — ex.: um braço sem cortar o tronco) |
 | SmartCut | Pincele (ou clique) a região — braço, cabeça — e o app propõe o corte na articulação (anel mais estreito e côncavo, via Shape Diameter Function + anéis geodésicos); a sugestão é um corte limitado editável |
 | Cortes livres | Desenhe um traço na tela e ele vira uma superfície de corte; perfis de junta **degrau, zigue-zague e onda** que escondem a emenda e travam a rotação |
-| Encaixes | Pino macho/fêmea e pino solto; folga por tecnologia (FDM/Resina), chanfro, parede mínima; **posição automática** (polo de inacessibilidade, vários pinos em faces alongadas, um por ilha); **nunca fura a parede** (encurta ou descarta com aviso); peça de calibração de folga |
+| Encaixes | Pino cilíndrico, **quadrado e hexagonal** (anti-rotação), **chaveta** (orientação única), pino solto, **ímã** e **rabo-de-andorinha** deslizante; folga por tecnologia (FDM/Resina), chanfro, parede mínima; posição automática (polo de inacessibilidade); **nunca fura a parede**; peça de calibração de folga |
+| Montagem | **Verificação de inserção sem colisão** por encaixe; **animação de montagem** passo a passo (M); vista explodida; **numeração gravada** (J1, J2…) nas duas faces, longe dos encaixes |
 | Histórico | Undo/redo ilimitado; linha do tempo editável — editar um corte antigo recalcula tudo depois; remover etapa remove dependentes |
-| Montagem | Vista explodida com slider |
 | Multicolor | 4 slots de filamento (AMS/BMCU), ferramenta de pintura por parte |
 | Análise | Dimensões, volume, material estimado, cabe na impressora (Bambu A1/A1 mini/X1, Mars 5 Ultra), área de colagem, orientação sugerida |
 | Exportar | 3MF com um objeto por parte e slot de filamento (Bambu Studio), STL/OBJ em ZIP, projeto `.fenda` |
@@ -33,7 +33,7 @@ npx playwright install chromium && npm run e2e   # E2E com screenshot
 
 ## Atalhos
 
-`C` corte · `S` SmartCut · `B` pincel · `L` curva livre · `T` pintar cor · `V` selecionar · `[` `]` raio do pincel · `P` encaixe · `E` explodir · `F` focar · `H` ocultar · `Enter`/`Esc` confirmar/cancelar · `Ctrl+Z/Y` · `Ctrl+S` salvar · `Ctrl+E` exportar 3MF · `Ctrl+K` comandos
+`C` corte · `S` SmartCut · `B` pincel · `L` curva livre · `T` pintar cor · `V` selecionar · `[` `]` raio do pincel · `P` encaixe · `M` simular montagem · `E` explodir · `F` focar · `H` ocultar · `Enter`/`Esc` confirmar/cancelar · `Ctrl+Z/Y` · `Ctrl+S` salvar · `Ctrl+E` exportar 3MF · `Ctrl+K` comandos
 
 ## Arquitetura
 
@@ -45,8 +45,8 @@ UI (React 19 + R3F)  ──commands──▶  Store (Zustand, documento imutáve
                                └ manifold-3d (WASM): corte, booleanos, reparo
 ```
 
-Toda geometria roda no worker via manifold-3d — toda parte exportada é fechada (manifold). Ver ADRs 0001–0004.
+Toda geometria roda no worker via manifold-3d — toda parte exportada é fechada (manifold). Ver ADRs 0001–0005.
 
 ## Desempenho medido
 
-`npm run bench` (Windows, Node 24): corte oblíquo de 500k triângulos ≈ 830 ms (meta da SPEC: 500 ms — ver [ADR 0003](docs/ADR/0003-orcamento-de-desempenho.md)); bundle inicial 286 KB gzip (viewport e WASM carregam sob demanda).
+`npm run bench` (Windows, Node 24): corte oblíquo de 500k triângulos ≈ 830 ms (meta da SPEC: 500 ms — ver [ADR 0003](docs/ADR/0003-orcamento-de-desempenho.md)); bundle inicial 288 KB gzip (viewport e WASM carregam sob demanda).

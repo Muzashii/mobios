@@ -2,6 +2,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { PartInspector } from '../features/analysis/PartInspector';
 import { ProjectInspector } from '../features/analysis/ProjectInspector';
 import { ConnectorInspector } from '../features/connectors/ConnectorInspector';
+import { LabelInspector } from '../features/connectors/LabelInspector';
+import { useHistory } from '../store/history';
 import { CutInspector } from '../features/cut/CutInspector';
 import { SmartCutInspector } from '../features/smartcut/SmartCutInspector';
 import { useUI } from '../store/ui';
@@ -11,6 +13,7 @@ export function Inspector() {
   const connectorEdit = useUI((s) => s.connectorEdit);
   const part = useUI((s) => s.parts.find((p) => p.id === s.selection));
   const brushing = useUI((s) => s.tool === 'brush');
+  const editKind = useHistory((s) => s.doc.operations.find((o) => o.id === connectorEdit)?.kind);
 
   const key = brushing ? 'smartcut' : draft ? `cut-${draft.editingOpId ?? 'new'}` : connectorEdit ? `k-${connectorEdit}` : part ? `part-${part.id}` : 'project';
   return (
@@ -29,7 +32,7 @@ export function Inspector() {
           ) : draft ? (
             <CutInspector draft={draft} />
           ) : connectorEdit ? (
-            <ConnectorInspector opId={connectorEdit} />
+            editKind === 'label' ? <LabelInspector opId={connectorEdit} /> : <ConnectorInspector opId={connectorEdit} />
           ) : part ? (
             <PartInspector part={part} />
           ) : (

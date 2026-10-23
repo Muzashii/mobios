@@ -80,6 +80,7 @@ function apply(results: Awaited<ReturnType<ReturnType<typeof geometry>['evaluate
       geometry: geometryObj!,
       stats: r.stats,
       producedBy: r.producedBy,
+      lineage: r.lineage,
       autoColor: colorFor(r.id),
     });
   });

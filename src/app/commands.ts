@@ -29,6 +29,19 @@ export function toggleExplode() {
   setUI({ explode: explode > 0 ? 0 : 0.6 });
 }
 
+export function toggleAssembly() {
+  const { assembly, joints } = useUI.getState();
+  if (assembly !== null) {
+    setUI({ assembly: null, assemblyPlaying: false });
+    return;
+  }
+  if (!joints.length) {
+    toast('info', 'Nada para montar', 'Faça um corte primeiro.');
+    return;
+  }
+  setUI({ assembly: 0, assemblyPlaying: true, explode: 0, draft: null, tool: 'select' });
+}
+
 export function toggleSelectedVisibility() {
   const { selection } = useUI.getState();
   if (!selection) return;
@@ -51,6 +64,7 @@ export const APP_COMMANDS: AppCommand[] = [
   { id: 'brush', label: 'Pincel de seleção', shortcut: 'B', group: 'Ferramentas', run: () => startBrush() },
   { id: 'draw', label: 'Corte por curva livre', shortcut: 'L', group: 'Ferramentas', run: () => startDraw() },
   { id: 'paint', label: 'Pintar partes (slots de filamento)', shortcut: 'T', group: 'Ferramentas', run: () => setUI({ tool: 'paint', draft: null }) },
+  { id: 'assembly', label: 'Simular montagem (animação)', shortcut: 'M', group: 'Visualizar', run: toggleAssembly },
   { id: 'explode', label: 'Alternar vista explodida', shortcut: 'E', group: 'Visualizar', run: toggleExplode },
   { id: 'focus', label: 'Focar seleção / tudo', shortcut: 'F', group: 'Visualizar', run: () => focus(useUI.getState().selection ?? 'all') },
   { id: 'hide', label: 'Ocultar/mostrar parte selecionada', shortcut: 'H', group: 'Visualizar', run: toggleSelectedVisibility },

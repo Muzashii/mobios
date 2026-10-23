@@ -6,17 +6,76 @@ import { setUI, useUI } from '../store/ui';
 import { Button, Kbd, Slider, cx } from '../ui/components';
 import { IconAlert, IconCheck, IconCube, IconCut, IconExport, IconInfo, IconOpen, IconPin, IconX } from '../ui/icons';
 import { contrast } from '../features/paint/SlotPicker';
-import { APP_COMMANDS } from './commands';
+import { activeJoint } from '../features/assembly/assembly';
+import { IconPause, IconPlay } from '../ui/icons';
+import { APP_COMMANDS, toggleAssembly } from './commands';
 
 export function ExplodeSlider() {
   const explode = useUI((s) => s.explode);
   const count = useUI((s) => s.parts.length);
-  if (count < 2) return null;
+  const assembling = useUI((s) => s.assembly !== null);
+  if (count < 2 || assembling) return null;
   return (
     <div className="pointer-events-auto absolute bottom-4 left-1/2 flex w-72 -translate-x-1/2 items-center gap-3 rounded-full border border-line bg-surface/90 px-4 py-2 shadow-panel backdrop-blur">
       <span className="text-[11px] text-muted">Explodir</span>
       <Slider label="Vista explodida" value={explode} min={0} max={1} step={0.01} onChange={(v) => setUI({ explode: v })} />
       <span className="num w-9 text-right text-[11px]">{Math.round(explode * 100)}%</span>
+    </div>
+  );
+}
+
+/** Assembly simulation: play/scrub the joints closing one by one, with the collision verdict. */
+export function AssemblyBar() {
+  const progress = useUI((s) => s.assembly);
+  const playing = useUI((s) => s.assemblyPlaying);
+  const joints = useUI((s) => s.joints);
+  const frame = useRef(0);
+
+  useEffect(() => {
+    if (!playing) return;
+    let last = performance.now();
+    const duration = 1400 * Math.max(1, joints.length);
+    const tick = (now: number) => {
+      const { assembly } = useUI.getState();
+      if (assembly === null) return;
+      const next = Math.min(1, assembly + (now - last) / duration);
+      last = now;
+      setUI({ assembly: next, assemblyPlaying: next < 1 });
+      if (next < 1) frame.current = requestAnimationFrame(tick);
+    };
+    frame.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame.current);
+  }, [playing, joints.length]);
+
+  if (progress === null) return null;
+  const checked = joints.filter((j) => j.assemblyClear !== undefined);
+  const colliding = checked.filter((j) => j.assemblyClear === false);
+  const current = activeJoint(joints, progress);
+  return (
+    <div className="pointer-events-auto absolute bottom-4 left-1/2 flex w-[30rem] max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col gap-1.5 rounded-xl border border-line bg-surface/90 px-4 py-2.5 shadow-panel backdrop-blur" data-testid="assembly-bar">
+      <div className="flex items-center gap-3">
+        <button
+          aria-label={playing ? 'Pausar' : 'Reproduzir'}
+          className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-accent-text"
+          onClick={() => setUI(playing ? { assemblyPlaying: false } : { assembly: progress >= 1 ? 0 : progress, assemblyPlaying: true })}
+        >
+          {playing ? <IconPause size={14} /> : <IconPlay size={14} />}
+        </button>
+        <Slider label="Progresso da montagem" value={progress} min={0} max={1} step={0.001} onChange={(v) => setUI({ assembly: v, assemblyPlaying: false })} />
+        <button aria-label="Fechar simulação" className="text-muted hover:text-text" onClick={toggleAssembly}>
+          <IconX size={15} />
+        </button>
+      </div>
+      <div className="flex justify-between text-[11px]">
+        <span className="text-muted">{current ? `Encaixando ${current.label}…` : 'Montagem completa'}</span>
+        {checked.length === 0 ? (
+          <span className="text-muted">sem encaixes para verificar</span>
+        ) : colliding.length ? (
+          <span className="text-danger">Colisão em {colliding.map((j) => j.label).join(', ')}</span>
+        ) : (
+          <span className="text-success">✓ {checked.length} encaixe(s) sem colisão</span>
+        )}
+      </div>
     </div>
   );
 }

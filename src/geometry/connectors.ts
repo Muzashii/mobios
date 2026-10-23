@@ -1,8 +1,8 @@
-import type { Manifold, Mat4 } from 'manifold-3d';
-import { faceSection } from './cut';
+import type { CrossSection, Manifold, Mat4 } from 'manifold-3d';
+import { dropSlivers, faceSection } from './cut';
 import { planeFrame, translation } from './math';
-import { placeConnectors } from './placement';
-import type { ConnectorParams, ConnectorType, Plane, SphereBounds, Technology, Vec2 } from './types';
+import { islandAxis, placeConnectors } from './placement';
+import type { ConnectorParams, ConnectorType, Plane, SphereBounds, Technology, Vec2, Vec3 } from './types';
 import type { Wasm } from './wasm';
 
 export const TOLERANCE_PRESETS: Record<Technology, { clearance: number; range: [number, number]; label: string }> = {
@@ -10,8 +10,22 @@ export const TOLERANCE_PRESETS: Record<Technology, { clearance: number; range: [
   RESINA: { clearance: 0.12, range: [0.1, 0.15], label: 'Resina' },
 };
 
-export function defaultConnectorParams(tech: Technology): ConnectorParams {
-  return {
+export const CONNECTOR_TYPES: { value: ConnectorType; label: string; hint: string }[] = [
+  { value: 'pin', label: 'Pino cilíndrico', hint: 'O pino nasce numa parte e encaixa num furo com folga na outra.' },
+  { value: 'square', label: 'Pino quadrado', hint: 'Não gira depois de encaixado.' },
+  { value: 'hex', label: 'Pino hexagonal', hint: 'Não gira; entra em 6 posições.' },
+  { value: 'key', label: 'Chaveta', hint: 'Pino com aba: encaixa numa única orientação.' },
+  { value: 'dowel', label: 'Pino solto', hint: 'Furos nas duas partes e um pino impresso à parte — ideal para peças finas.' },
+  { value: 'magnet', label: 'Ímã', hint: 'Furos para ímãs nas duas faces: parte removível. Diâmetro e altura do ímã.' },
+  { value: 'dovetail', label: 'Rabo-de-andorinha', hint: 'Trilho deslizante atravessando a face — bases e cenários.' },
+];
+
+/** Types with a male peg and a female socket. */
+const PEG: ConnectorType[] = ['pin', 'square', 'hex', 'key'];
+export const hasMaleSide = (t: ConnectorType) => PEG.includes(t) || t === 'dovetail';
+
+export function defaultConnectorParams(tech: Technology, type: ConnectorType = 'pin'): ConnectorParams {
+  const base: ConnectorParams = {
     diameter: 5,
     depth: 6,
     clearance: TOLERANCE_PRESETS[tech].clearance,
@@ -20,34 +34,78 @@ export function defaultConnectorParams(tech: Technology): ConnectorParams {
     count: 'auto',
     maleSide: 'a',
   };
+  if (type === 'magnet') return { ...base, diameter: 6, depth: 3, clearance: tech === 'FDM' ? 0.15 : 0.1, chamfer: 0.3 };
+  if (type === 'dovetail') return { ...base, diameter: 8, depth: 4, count: 1 };
+  return base;
 }
 
-const SEGMENTS = 48;
+const SEG = 48;
+const COS30 = Math.cos(Math.PI / 6);
 
-/** Cylinder along +Z from z0 to z1 with optional chamfers (radius shrinks by `c0` / `c1` at the ends). */
-function chamferedCylinder(wasm: Wasm, r: number, z0: number, z1: number, c0 = 0, c1 = 0): Manifold {
-  const pieces: Manifold[] = [];
+/** Cross-section of the male peg, centred at the origin (diameter = across flats). */
+function maleProfile(wasm: Wasm, type: ConnectorType, d: number): CrossSection {
+  const CS = wasm.CrossSection;
+  switch (type) {
+    case 'square':
+      return CS.square([d, d], true);
+    case 'hex':
+      return CS.circle(d / 2 / COS30, 6);
+    case 'key': {
+      const c = CS.circle(d / 2, SEG);
+      const tab = CS.square([d * 0.62, d * 0.36], true).translate([d * 0.35, 0]);
+      const out = c.add(tab);
+      c.delete();
+      tab.delete();
+      return out;
+    }
+    default:
+      return CS.circle(d / 2, SEG);
+  }
+}
+
+/** Distance from the centre to the farthest point of the male profile. */
+function outerRadius(type: ConnectorType, d: number) {
+  switch (type) {
+    case 'square':
+      return (d / 2) * Math.SQRT2;
+    case 'hex':
+      return d / 2 / COS30;
+    case 'key':
+      return Math.hypot(d * 0.66, d * 0.18);
+    default:
+      return d / 2;
+  }
+}
+
+/** Extrudes a profile from z0 to z1, tapering the last `chamferTop` mm towards the centre. */
+function prism(cs: CrossSection, z0: number, z1: number, chamferTop = 0, outer = 1): Manifold {
   const h = z1 - z0;
-  c0 = Math.min(c0, h * 0.3, r * 0.45);
-  c1 = Math.min(c1, h * 0.3, r * 0.45);
-  const body = wasm.Manifold.cylinder(h - c0 - c1, r, r, SEGMENTS).translate([0, 0, z0 + c0]);
-  pieces.push(body);
-  if (c0 > 0) pieces.push(wasm.Manifold.cylinder(c0 + 1e-4, r - c0, r, SEGMENTS).translate([0, 0, z0]));
-  if (c1 > 0) pieces.push(wasm.Manifold.cylinder(c1 + 1e-4, r, r - c1, SEGMENTS).translate([0, 0, z1 - c1 - 1e-4]));
-  if (pieces.length === 1) return body;
-  const out = wasm.Manifold.union(pieces);
-  pieces.forEach((p) => p.delete());
+  const ch = Math.min(chamferTop, h * 0.3, outer * 0.45);
+  if (ch <= 0) return cs.extrude(h).translate([0, 0, z0]);
+  const body = cs.extrude(h - ch).translate([0, 0, z0]);
+  const scale = Math.max(0.3, (outer - ch) / outer);
+  const tip = cs.extrude(ch + 1e-4, 0, 0, [scale, scale]).translate([0, 0, z1 - ch - 1e-4]);
+  const out = body.add(tip);
+  body.delete();
+  tip.delete();
   return out;
 }
 
-/** Hole along +Z with a flared (chamfered) entrance at z = 0. */
-function hole(wasm: Wasm, r: number, depth: number, chamfer: number, below = 0.2): Manifold {
-  const shaft = wasm.Manifold.cylinder(depth + below, r, r, SEGMENTS).translate([0, 0, -below]);
-  if (chamfer <= 0) return shaft;
-  const flare = wasm.Manifold.cylinder(chamfer + below, r + chamfer + below, r, SEGMENTS).translate([0, 0, -below]);
+/** Socket: profile grown by the clearance, plus a flared entrance at z = 0. */
+function socket(cs: CrossSection, depth: number, clearance: number, chamfer: number, outer: number): Manifold {
+  const grown = cs.offset(clearance, 'Round', 2, SEG);
+  const below = 0.2;
+  const shaft = grown.extrude(depth + below).translate([0, 0, -below]);
+  if (chamfer <= 0) {
+    grown.delete();
+    return shaft;
+  }
+  const flareCs = cs.offset(clearance + chamfer, 'Round', 2, SEG);
+  const ro = outer + clearance + chamfer;
+  const s = (outer + clearance) / ro;
+  const flare = flareCs.extrude(chamfer + below, 0, 0, [s, s]).translate([0, 0, -below]);
   const out = shaft.add(flare);
-  shaft.delete();
-  flare.delete();
+  [grown, flareCs, shaft, flare].forEach((m) => m.delete());
   return out;
 }
 
@@ -66,6 +124,12 @@ export interface ConnectorResult {
   pins?: Manifold;
   placed: number;
   warnings: string[];
+  /** World direction B slides off A (normal, or the rail axis for dovetails). */
+  insertDir: Vec3;
+  /** Footprints on the face in plane-frame 2D (for label placement). */
+  obstacles: { c: Vec2; r: number }[];
+  /** Largest overlap found while sweeping B along insertDir (mm³). */
+  sweepOverlap: number;
 }
 
 export interface JointGeometry {
@@ -87,133 +151,256 @@ export function jointFaceIslands(b: Manifold, joint: JointGeometry) {
   return { frame, islands };
 }
 
-/**
- * Adds connectors across a joint. Never lets a hole break through a wall:
- * each pin is validated by containment and shortened or dropped if needed.
- */
-export function applyConnector(
-  wasm: Wasm,
-  a: Manifold,
-  b: Manifold,
-  joint: JointGeometry,
-  type: ConnectorType,
-  p: ConnectorParams,
-): ConnectorResult {
-  const warnings: string[] = [];
-  const { islands } = jointFaceIslands(b, joint);
-  if (islands.length === 0) throw new Error('Face de corte não encontrada para este encaixe.');
+const unionAll = (wasm: Wasm, base: Manifold, extra: Manifold[]) => {
+  if (!extra.length) return base.translate([0, 0, 0]);
+  const merged = wasm.Manifold.union(extra);
+  const out = dropSlivers(wasm, base.add(merged));
+  merged.delete();
+  return out;
+};
+const subtractAll = (wasm: Wasm, base: Manifold, extra: Manifold[]) => {
+  if (!extra.length) return base.translate([0, 0, 0]);
+  const merged = wasm.Manifold.union(extra);
+  const out = dropSlivers(wasm, base.subtract(merged));
+  merged.delete();
+  return out;
+};
 
-  const r = p.diameter / 2;
-  const rh = r + p.clearance;
-  const keepout = rh + p.chamfer + p.minWall;
+/**
+ * Assembly check: sweeps B along `dir` from `travel` back to the assembled position and
+ * returns the largest overlap with A. Done on the joint neighbourhood only (fast).
+ */
+export function sweepOverlap(a: Manifold, b: Manifold, dir: Vec3, travel: number, region: Manifold): number {
+  const la = a.intersect(region), lb = b.intersect(region);
+  let worst = 0;
+  for (const f of [1, 0.75, 0.5, 0.3, 0.15, 0.05, 0]) {
+    const moved = lb.translate([dir[0] * travel * f, dir[1] * travel * f, dir[2] * travel * f]);
+    const inter = la.intersect(moved);
+    worst = Math.max(worst, inter.volume());
+    inter.delete();
+    moved.delete();
+  }
+  la.delete();
+  lb.delete();
+  return worst;
+}
+
+/**
+ * Adds connectors across a joint. Never lets a socket break through a wall: each one is
+ * validated by containment and shortened or dropped. Also verifies the parts can be
+ * assembled along the insertion direction without collisions.
+ */
+export function applyConnector(wasm: Wasm, a: Manifold, b: Manifold, joint: JointGeometry, type: ConnectorType, p: ConnectorParams): ConnectorResult {
+  const { islands, frame } = jointFaceIslands(b, joint);
+  if (islands.length === 0) throw new Error('Face de corte não encontrada para este encaixe.');
+  const res = type === 'dovetail' ? dovetail(wasm, a, b, islands, frame, p) : pegs(wasm, a, b, islands, frame, type, p);
+
+  // Neighbourhood box around the face for the sweep check.
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const isl of islands) for (const poly of isl.polys) for (const [x, y] of poly) {
+    minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+  }
+  const travel = (type === 'dovetail' ? Math.hypot(maxX - minX, maxY - minY) : p.depth + p.clearance) + 2;
+  const pad = travel + p.depth + 4;
+  const cube = wasm.Manifold.cube([maxX - minX + 2 * pad, maxY - minY + 2 * pad, 2 * pad]);
+  const local = cube.translate([minX - pad, minY - pad, -pad]);
+  const box = local.transform(frame.toWorld as Mat4);
+  cube.delete();
+  local.delete();
+  res.sweepOverlap = res.placed ? sweepOverlap(res.a, res.b, res.insertDir, travel, box) : 0;
+  box.delete();
+  return res;
+}
+
+type Islands = ReturnType<typeof jointFaceIslands>['islands'];
+type Frame = ReturnType<typeof planeFrame>;
+
+function pegs(wasm: Wasm, a: Manifold, b: Manifold, islands: Islands, frame: Frame, type: ConnectorType, p: ConnectorParams): ConnectorResult {
+  const warnings: string[] = [];
+  const isMagnet = type === 'magnet', isDowel = type === 'dowel';
+  const both = isMagnet || isDowel; // sockets on both sides
+  const profileType: ConnectorType = both ? 'pin' : type;
+  const outer = outerRadius(profileType, p.diameter);
+  const keepout = outer + p.clearance + p.chamfer + p.minWall;
   const centers: Vec2[] = [];
   for (const island of islands) {
     const placed = placeConnectors(island.polys, { keepout, count: p.count });
-    if (placed.length === 0) warnings.push(`Uma face (${island.area.toFixed(0)} mm²) é pequena demais para um pino de ${p.diameter} mm.`);
+    if (placed.length === 0) warnings.push(`Uma face (${island.area.toFixed(0)} mm²) é pequena demais para este encaixe de ${p.diameter} mm.`);
     centers.push(...placed);
   }
 
-  // Work in a frame where the male side (or side "a" for dowels) is below z = 0.
-  const flip = type === 'pin' && p.maleSide === 'b';
-  const frame = planeFrame(joint.plane, flip);
-  const toWorld = (m: Manifold, c: Vec2): Manifold => {
-    const t = m.transform(translation([c[0], c[1], 0]));
+  // Built as if the male were on A (z < 0); mirrored when it lives on B.
+  const flip = !both && p.maleSide === 'b';
+  const male = flip ? b : a;
+  const female = flip ? a : b;
+  const place = (m: Manifold, c: Vec2): Manifold => {
+    const mirrored = flip ? m.mirror([0, 0, 1]) : m;
+    if (flip) m.delete();
+    const t = mirrored.transform(translation([c[0], c[1], 0]));
+    mirrored.delete();
     const w = t.transform(frame.toWorld as Mat4);
     t.delete();
-    m.delete();
     return w;
   };
-  // Islands were computed with the unflipped frame; mirror X/Y consistently.
-  const base = planeFrame(joint.plane);
-  const toFrame = (c: Vec2): Vec2 => {
-    if (!flip) return c;
-    const w = [
-      base.origin[0] + base.u[0] * c[0] + base.v[0] * c[1],
-      base.origin[1] + base.u[1] * c[0] + base.v[1] * c[1],
-      base.origin[2] + base.u[2] * c[0] + base.v[2] * c[1],
-    ];
-    const d = [w[0] - frame.origin[0], w[1] - frame.origin[1], w[2] - frame.origin[2]];
-    return [
-      d[0] * frame.u[0] + d[1] * frame.u[1] + d[2] * frame.u[2],
-      d[0] * frame.v[0] + d[1] * frame.v[1] + d[2] * frame.v[2],
-    ];
-  };
+  const probeCyl = (r: number, z0: number, z1: number) => wasm.Manifold.cylinder(z1 - z0, r, r, 32).translate([0, 0, z0]);
 
-  const lower = flip ? b : a; // solid at z < 0 in `frame`
-  const upper = flip ? a : b; // solid at z > 0
-  const adds: Manifold[] = [];
-  const upperCuts: Manifold[] = [];
-  const lowerCuts: Manifold[] = [];
-  const pins: Manifold[] = [];
+  const profile = maleProfile(wasm, profileType, p.diameter);
+  const adds: Manifold[] = [], femaleCuts: Manifold[] = [], maleCuts: Manifold[] = [], pins: Manifold[] = [];
+  const obstacles: { c: Vec2; r: number }[] = [];
   let placed = 0;
+  const minDepth = isMagnet ? p.depth : Math.max(1.5, p.diameter * 0.4);
 
-  for (const c0 of centers) {
-    const c = toFrame(c0);
+  for (const c of centers) {
     let depth = p.depth;
     let ok = false;
-    for (let attempt = 0; attempt < 4 && depth >= Math.max(1.5, p.diameter * 0.4); attempt++) {
-      const probeUp = toWorld(wasm.Manifold.cylinder(depth + p.clearance + p.minWall, rh + p.minWall, rh + p.minWall, 32), c);
-      const upOk = containment(upper, probeUp) > 0.985;
-      probeUp.delete();
-      // A male pin only needs its short embed below; a dowel needs a full hole on both sides.
-      const downDepth = type === 'dowel' ? depth + p.clearance + p.minWall : Math.min(1, depth * 0.25) + p.minWall;
-      const probeDown = toWorld(
-        wasm.Manifold.cylinder(downDepth, rh + p.minWall, rh + p.minWall, 32).translate([0, 0, -downDepth]),
-        c,
-      );
-      const downOk = containment(lower, probeDown) > 0.985;
-      probeDown.delete();
+    for (let attempt = 0; attempt < 4 && depth >= minDepth - 1e-9; attempt++) {
+      const wallR = outer + p.clearance + p.minWall;
+      const up = place(probeCyl(wallR, 0, depth + p.clearance + p.minWall), c);
+      const upOk = containment(female, up) > 0.985;
+      up.delete();
+      const downDepth = both ? depth + p.clearance + p.minWall : Math.min(1, depth * 0.25) + p.minWall;
+      const down = place(probeCyl(wallR, -downDepth, 0), c);
+      const downOk = containment(male, down) > 0.985;
+      down.delete();
       if (upOk && downOk) { ok = true; break; }
+      if (isMagnet) break; // a magnet has a fixed height
       depth *= 0.75;
     }
     if (!ok) {
-      warnings.push('Um pino foi descartado: atravessaria a parede da peça.');
+      warnings.push(isMagnet ? 'Um ímã foi descartado: não há espessura para o furo.' : 'Um encaixe foi descartado: atravessaria a parede da peça.');
       continue;
     }
     if (depth < p.depth - 1e-6) warnings.push(`Profundidade reduzida para ${depth.toFixed(1)} mm para não furar a parede.`);
     placed++;
-    const embed = Math.min(1, depth * 0.25);
-    if (type === 'pin') {
-      adds.push(toWorld(chamferedCylinder(wasm, r, -embed, depth, 0, p.chamfer), c));
-      upperCuts.push(toWorld(hole(wasm, rh, depth + p.clearance, p.chamfer), c));
-    } else {
-      upperCuts.push(toWorld(hole(wasm, rh, depth + p.clearance, p.chamfer), c));
-      const down = hole(wasm, rh, depth + p.clearance, p.chamfer);
-      const mirrored = down.mirror([0, 0, 1]);
+    obstacles.push({ c, r: outer + p.clearance + p.chamfer + 0.8 });
+    if (isMagnet) {
+      // Magnet height + glue gap on each side; no flare (magnets press-fit).
+      const hole = (cs: CrossSection) => socket(cs, depth + 0.2, p.clearance, 0, outer);
+      femaleCuts.push(place(hole(profile), c));
+      const down = hole(profile);
+      maleCuts.push(place(down.mirror([0, 0, 1]), c));
       down.delete();
-      lowerCuts.push(toWorld(mirrored, c));
-      pins.push(toWorld(chamferedCylinder(wasm, r, -depth, depth, p.chamfer, p.chamfer), c));
+    } else if (isDowel) {
+      femaleCuts.push(place(socket(profile, depth + p.clearance, p.clearance, p.chamfer, outer), c));
+      const down = socket(profile, depth + p.clearance, p.clearance, p.chamfer, outer);
+      maleCuts.push(place(down.mirror([0, 0, 1]), c));
+      down.delete();
+      const half = prism(profile, 0, depth, p.chamfer, outer);
+      const other = half.mirror([0, 0, 1]);
+      pins.push(place(half.add(other), c));
+      half.delete();
+      other.delete();
+    } else {
+      const embed = Math.min(1, depth * 0.25);
+      adds.push(place(prism(profile, -embed, depth, p.chamfer, outer), c));
+      femaleCuts.push(place(socket(profile, depth + p.clearance, p.clearance, p.chamfer, outer), c));
     }
   }
+  profile.delete();
 
-  const unionAll = (base: Manifold, extra: Manifold[]) => {
-    if (!extra.length) return base.translate([0, 0, 0]);
-    const merged = wasm.Manifold.union(extra);
-    const out = base.add(merged);
-    merged.delete();
-    return out;
-  };
-  const subtractAll = (base: Manifold, extra: Manifold[]) => {
-    if (!extra.length) return base.translate([0, 0, 0]);
-    const merged = wasm.Manifold.union(extra);
-    const out = base.subtract(merged);
-    merged.delete();
-    return out;
-  };
-
-  const newLower = type === 'pin' ? unionAll(lower, adds) : subtractAll(lower, lowerCuts);
-  const newUpper = subtractAll(upper, upperCuts);
-  [...adds, ...upperCuts, ...lowerCuts].forEach((m) => m.delete());
-
+  const newMale = adds.length ? unionAll(wasm, male, adds) : subtractAll(wasm, male, maleCuts);
+  const newFemale = subtractAll(wasm, female, femaleCuts);
+  [...adds, ...femaleCuts, ...maleCuts].forEach((m) => m.delete());
   const result: ConnectorResult = {
-    a: flip ? newUpper : newLower,
-    b: flip ? newLower : newUpper,
+    a: flip ? newFemale : newMale,
+    b: flip ? newMale : newFemale,
     placed,
     warnings,
+    insertDir: [...frame.n] as Vec3,
+    obstacles,
+    sweepOverlap: 0,
   };
   if (pins.length) {
     result.pins = wasm.Manifold.compose(pins);
     pins.forEach((m) => m.delete());
   }
   return result;
+}
+
+/** Sliding dovetail rail along the longest direction of each face island. */
+function dovetail(wasm: Wasm, a: Manifold, b: Manifold, islands: Islands, frame: Frame, p: ConnectorParams): ConnectorResult {
+  const warnings: string[] = [];
+  const flip = p.maleSide === 'b';
+  const male = flip ? b : a;
+  const female = flip ? a : b;
+  const w = p.diameter, wTop = w * 1.5;
+  const rails: Manifold[] = [], slots: Manifold[] = [];
+  const obstacles: { c: Vec2; r: number }[] = [];
+  let axisWorld: Vec3 = [...frame.u] as Vec3;
+  let placed = 0;
+
+  for (const island of islands) {
+    const [c] = placeConnectors(island.polys, { keepout: wTop / 2 + p.clearance + p.minWall, count: 1 });
+    if (!c) {
+      warnings.push(`Uma face (${island.area.toFixed(0)} mm²) é estreita demais para um rabo-de-andorinha de ${w} mm.`);
+      continue;
+    }
+    const ax = islandAxis(island.polys);
+    let lo = Infinity, hi = -Infinity;
+    for (const poly of island.polys) for (const [x, y] of poly) {
+      const t = (x - c[0]) * ax[0] + (y - c[1]) * ax[1];
+      lo = Math.min(lo, t); hi = Math.max(hi, t);
+    }
+    const len = hi - lo + 4;
+    const mid: Vec2 = [c[0] + ax[0] * (lo + hi) / 2, c[1] + ax[1] * (lo + hi) / 2];
+    // Local prism: X across the rail, Y along the normal, Z along the rail axis.
+    const toFrame: Mat4 = [-ax[1], ax[0], 0, 0, 0, 0, 1, 0, ax[0], ax[1], 0, 0, mid[0], mid[1], 0, 1];
+    const place = (m: Manifold) => {
+      const mirrored = flip ? m.mirror([0, 0, 1]) : m;
+      const local = mirrored.transform(toFrame);
+      if (flip) mirrored.delete();
+      m.delete();
+      const world = local.transform(frame.toWorld as Mat4);
+      local.delete();
+      return world;
+    };
+    const trapezoid = (grow: number, h: number, below: number) =>
+      new wasm.CrossSection([[[-w / 2 - grow, -below], [w / 2 + grow, -below], [wTop / 2 + grow, h + grow], [-wTop / 2 - grow, h + grow]]], 'Positive');
+
+    let h = p.depth;
+    let ok = false;
+    for (let attempt = 0; attempt < 4 && h >= 1.5; attempt++) {
+      // Wall check on the middle 60% of the rail (its ends legitimately exit the part).
+      const cs = trapezoid(p.clearance + p.minWall, h, 0);
+      const probe = place(cs.extrude(len * 0.6 - 4, 0, 0, [1, 1], true));
+      cs.delete();
+      ok = containment(female, probe) > 0.97;
+      probe.delete();
+      if (ok) break;
+      h *= 0.75;
+    }
+    if (!ok) {
+      warnings.push('Um rabo-de-andorinha foi descartado: a peça é fina demais para o trilho.');
+      continue;
+    }
+    if (h < p.depth - 1e-6) warnings.push(`Altura do trilho reduzida para ${h.toFixed(1)} mm para não furar a parede.`);
+    const railCs = trapezoid(0, h, 0.3);
+    const rail = place(railCs.extrude(len, 0, 0, [1, 1], true));
+    railCs.delete();
+    // The rail only exists inside the other part's volume, so it never sticks out.
+    rails.push(rail.intersect(female));
+    rail.delete();
+    const slotCs = trapezoid(p.clearance, h, 0.3);
+    slots.push(place(slotCs.extrude(len + 4, 0, 0, [1, 1], true)));
+    slotCs.delete();
+    for (let s = lo; s <= hi; s += wTop) obstacles.push({ c: [c[0] + ax[0] * s, c[1] + ax[1] * s], r: wTop / 2 + p.clearance + 0.8 });
+    axisWorld = [0, 1, 2].map((k) => frame.u[k] * ax[0] + frame.v[k] * ax[1]) as Vec3;
+    placed++;
+  }
+
+  const newMale = unionAll(wasm, male, rails);
+  const before = female.decompose();
+  const newFemale = subtractAll(wasm, female, slots);
+  const after = newFemale.decompose();
+  if (after.length > before.length) warnings.push('O trilho divide a outra parte em pedaços — use um rabo-de-andorinha menor.');
+  [...before, ...after, ...rails, ...slots].forEach((m) => m.delete());
+  return {
+    a: flip ? newFemale : newMale,
+    b: flip ? newMale : newFemale,
+    placed,
+    warnings,
+    insertDir: axisWorld,
+    obstacles,
+    sweepOverlap: 0,
+  };
 }

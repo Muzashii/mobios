@@ -186,6 +186,12 @@ function PlaneCutInspector({ draft }: { draft: CutDraft }) {
           )}
         </Section>
 
+        {allowsConnector && (
+          <Section title="Numeração gravada" aside={<Switch label="Numerar faces" checked={draft.label} onChange={(label) => updateDraft({ label })} />}>
+            <p className="text-[11px] leading-snug text-muted">Grava o código da junta (J1, J2…) em baixo-relevo nas duas faces, longe dos encaixes.</p>
+          </Section>
+        )}
+
         <Section
           title="Encaixe"
           aside={

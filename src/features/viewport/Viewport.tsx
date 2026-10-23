@@ -8,6 +8,7 @@ import { useHistory } from '../../store/history';
 import { printerOf } from '../../store/project';
 import { setUI, useUI } from '../../store/ui';
 import { tokens } from '../../ui/tokens';
+import { assemblyOffsets } from '../assembly/assembly';
 import { explodeOffsets } from '../assembly/explode';
 import { BrushLayer } from '../smartcut/BrushLayer';
 import { CutPreview } from './CutPreview';
@@ -136,7 +137,12 @@ function Scene() {
   const draft = useUI((s) => s.draft);
   const theme = useUI((s) => s.theme);
   const box = useSceneBox();
-  const offsets = useMemo(() => explodeOffsets(parts, explode), [parts, explode]);
+  const assembly = useUI((s) => s.assembly);
+  const joints = useUI((s) => s.joints);
+  const offsets = useMemo(
+    () => (assembly !== null ? assemblyOffsets(parts, joints, assembly) : explodeOffsets(parts, explode)),
+    [parts, joints, explode, assembly],
+  );
   useBoundsTrees();
   const t = tokens[theme];
   const gridZ = box.isEmpty() ? 0 : box.min.z - 0.05;

@@ -63,6 +63,7 @@ function baseDraft(target: PartId, plane: Plane, radius: number): CutDraft {
     bounded: false,
     radius,
     connector: { enabled: true, type: 'pin', params: connectorDefaults() },
+    label: true,
   };
 }
 
@@ -138,7 +139,7 @@ export function finishStroke(frame: StrokeFrame, points: Vec2[]) {
 /** Re-opens an existing cut for editing (later operations recompute on commit). */
 export async function editCut(opId: string) {
   const doc = getDoc();
-  const op = doc.operations.find((o): o is CutOperation => o.id === opId && o.kind !== 'connector');
+  const op = doc.operations.find((o): o is CutOperation => o.id === opId && (o.kind === 'cut-plane' || o.kind === 'cut-surface'));
   if (!op) return;
   const connector = doc.operations.find((o): o is Extract<Operation, { kind: 'connector' }> => o.kind === 'connector' && o.joint === opId);
   const mesh = await geometry().partDisplayBefore(opId, op.target);
@@ -154,6 +155,9 @@ export async function editCut(opId: string) {
   draft.previewGeometry = previewGeometry;
   draft.connectorOpId = connector?.id;
   draft.connector = connector ? { enabled: true, type: connector.type, params: connector.params } : { ...draft.connector, enabled: false };
+  const label = doc.operations.find((o) => o.kind === 'label' && o.joint === opId);
+  draft.label = !!label;
+  draft.labelOpId = label?.id;
   if (op.kind === 'cut-plane') {
     draft.bounded = !!op.bounded;
     draft.radius = op.bounded?.radius ?? draft.radius;
@@ -210,7 +214,24 @@ export function commitCut() {
   } else if (draft.connectorOpId) {
     cmds.push(removeOperation(draft.connectorOpId, 'Remover encaixe'));
   }
-  const n = doc.operations.filter((o) => o.kind !== 'connector').length + (editing ? 0 : 1);
+  // Numbering goes after the connector so it is placed clear of the pins.
+  const wantsLabel = draft.label && draftAllowsConnector(draft);
+  if (wantsLabel && !draft.labelOpId) {
+    const op: Operation = { kind: 'label', id: newId('l'), joint: cutId, size: 6, depth: 0.6 };
+    cmds.push({
+      label: 'Numeração',
+      apply: (d) => {
+        const ops = [...d.operations];
+        const anchor = ops.find((o) => o.kind === 'connector' && o.joint === cutId)?.id ?? cutId;
+        const i = ops.findIndex((o) => o.id === anchor);
+        ops.splice(i < 0 ? ops.length : i + 1, 0, op);
+        return { ...d, operations: ops };
+      },
+    });
+  } else if (!wantsLabel && draft.labelOpId) {
+    cmds.push(removeOperation(draft.labelOpId, 'Remover numeração'));
+  }
+  const n = doc.operations.filter((o) => o.kind === 'cut-plane' || o.kind === 'cut-surface').length + (editing ? 0 : 1);
   dispatch(batch(editing ? 'Editar corte' : `Corte ${n}${withConnector ? ' + encaixe' : ''}`, cmds));
   draft.previewGeometry?.dispose();
   setUI({ draft: null, tool: 'select', selection: null });

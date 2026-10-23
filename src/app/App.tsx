@@ -6,7 +6,7 @@ import { useUI } from '../store/ui';
 import { ViewportBoundary } from './ViewportBoundary';
 import { Inspector } from './Inspector';
 import { Outliner } from './Outliner';
-import { BusyPill, CommandPalette, DropOverlay, EmptyState, ExplodeSlider, Toasts, ToolHint } from './Overlays';
+import { AssemblyBar, BusyPill, CommandPalette, DropOverlay, EmptyState, ExplodeSlider, Toasts, ToolHint } from './Overlays';
 import { Toolbar } from './Toolbar';
 import { TopBar } from './TopBar';
 import { useShortcuts } from './useShortcuts';
@@ -40,6 +40,7 @@ export function App() {
             <ToolHint />
             <BusyPill />
             <ExplodeSlider />
+            <AssemblyBar />
           </div>
         </main>
         <div className="row-span-2">
