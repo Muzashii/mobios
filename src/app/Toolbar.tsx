@@ -1,12 +1,13 @@
-import { startCut } from '../features/cut/cutActions';
+import { startBrush, startCut, startDraw } from '../features/cut/cutActions';
 import { useHistory } from '../store/history';
 import { focus, setUI, useUI } from '../store/ui';
 import { IconButton } from '../ui/components';
-import { IconBed, IconCursor, IconCut, IconExplode, IconFocus, IconPaint, IconPin } from '../ui/icons';
+import { IconBed, IconBrush, IconCursor, IconCut, IconExplode, IconFocus, IconPaint, IconPen, IconPin } from '../ui/icons';
 import { toggleExplode } from './commands';
 
 export function Toolbar() {
   const tool = useUI((s) => s.tool);
+  const draftMode = useUI((s) => s.draft?.mode);
   const explode = useUI((s) => s.explode);
   const showBed = useUI((s) => s.showBed);
   const connectorEdit = useUI((s) => s.connectorEdit);
@@ -18,8 +19,14 @@ export function Toolbar() {
       <IconButton side="right" label="Selecionar" shortcut="V" active={tool === 'select' && !connectorEdit} onClick={() => setUI({ tool: 'select', draft: null })}>
         <IconCursor />
       </IconButton>
-      <IconButton side="right" label="Corte por plano" shortcut="C" active={tool === 'cut'} disabled={!hasParts} onClick={() => startCut()} data-testid="tool-cut">
+      <IconButton side="right" label="Corte por plano" shortcut="C" active={tool === 'cut' && draftMode === 'plane'} disabled={!hasParts} onClick={() => startCut()} data-testid="tool-cut">
         <IconCut />
+      </IconButton>
+      <IconButton side="right" label="SmartCut — pincele a região" shortcut="S" active={tool === 'brush'} disabled={!hasParts} onClick={() => startBrush()} data-testid="tool-smartcut">
+        <IconBrush />
+      </IconButton>
+      <IconButton side="right" label="Corte por curva livre" shortcut="L" active={tool === 'draw' || draftMode === 'surface'} disabled={!hasParts} onClick={() => startDraw()} data-testid="tool-draw">
+        <IconPen />
       </IconButton>
       <IconButton
         side="right"
@@ -31,7 +38,7 @@ export function Toolbar() {
       >
         <IconPin />
       </IconButton>
-      <IconButton side="right" label="Pintar partes (filamento)" shortcut="B" active={tool === 'paint'} disabled={!hasParts} onClick={() => setUI({ tool: tool === 'paint' ? 'select' : 'paint', draft: null })}>
+      <IconButton side="right" label="Pintar partes (filamento)" shortcut="T" active={tool === 'paint'} disabled={!hasParts} onClick={() => setUI({ tool: tool === 'paint' ? 'select' : 'paint', draft: null })}>
         <IconPaint />
       </IconButton>
       <div className="my-1 h-px w-6 bg-line" />

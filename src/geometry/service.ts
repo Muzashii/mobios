@@ -1,12 +1,14 @@
+import type { Manifold } from 'manifold-3d';
 import { decodeModel, zipFiles } from '../io';
 import { writeOBJ } from '../io/obj';
 import { writeSTL } from '../io/stl';
 import { write3MF } from '../io/threemf';
 import { calibrationPieces, exampleFigure } from './primitives';
+import { suggestSmartCut } from './smartcut';
 import { toDisplayMesh } from './display';
 import { Engine } from './engine';
 import { manifoldToMeshData, meshDataToManifold, repairMesh } from './repair';
-import type { DisplayMesh, EvalResult, ExportFormat, ExportPart, ImportedMesh, MeshData, Operation, SourceRef, Technology } from './types';
+import type { DisplayMesh, SmartCutSuggestion, Vec3, EvalResult, ExportFormat, ExportPart, ImportedMesh, MeshData, Operation, SourceRef, Technology } from './types';
 import type { Wasm } from './wasm';
 
 const safeFile = (name: string) => name.replace(/[\\/:*?"<>|]+/g, '_').trim() || 'parte';
@@ -51,6 +53,25 @@ export class GeometryService {
   partDisplayBefore(opId: string, partId: string): DisplayMesh | null {
     const m = this.engine.part(partId, opId);
     return m ? toDisplayMesh(manifoldToMeshData(m)) : null;
+  }
+
+  /** SmartCut: suggested bounded plane separating the seeded region (state before `beforeOp` when editing). */
+  smartCut(partId: string, seeds: Vec3[], seedRadius: number, beforeOp?: string): SmartCutSuggestion {
+    const m = this.engine.part(partId, beforeOp);
+    if (!m) throw new Error('Parte não encontrada.');
+    return this.smartCutOn(m, seeds, seedRadius);
+  }
+
+  smartCutOn(m: Manifold, seeds: Vec3[], seedRadius: number): SmartCutSuggestion {
+    // Coarse CAD meshes (long thin triangles) hide creases: resample them evenly first.
+    const box = m.boundingBox();
+    const diag = Math.hypot(box.max[0] - box.min[0], box.max[1] - box.min[1], box.max[2] - box.min[2]);
+    const dense = m.numTri() < 150_000 ? m.refineToLength(diag / 120) : null;
+    try {
+      return suggestSmartCut(manifoldToMeshData(dense ?? m), seeds, seedRadius);
+    } finally {
+      dense?.delete();
+    }
   }
 
   example(id: string): ImportedMesh {

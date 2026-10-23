@@ -1,4 +1,4 @@
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import { Color, type Mesh, type MeshStandardMaterial, type Vector3 } from 'three';
 import { setPartMeta } from '../../store/commands';
@@ -6,6 +6,7 @@ import { dispatch, useHistory } from '../../store/history';
 import { focus, setUI, useUI, type ViewPart } from '../../store/ui';
 import { ACCENT } from '../../ui/tokens';
 import { partColor } from '../paint/colors';
+import { brushDown, brushMove } from '../smartcut/brush';
 
 const accent = new Color(ACCENT);
 
@@ -13,6 +14,9 @@ function PartMesh({ part, offset, color, selected, hovered, interactive }: { par
   const mesh = useRef<Mesh>(null);
   const mat = useRef<MeshStandardMaterial>(null);
   const busy = useUI((s) => s.busy);
+  const tool = useUI((s) => s.tool);
+  const controls = useThree((s) => s.controls);
+  const brushing = tool === 'brush';
 
   useFrame(({ clock }) => {
     if (!mat.current) return;
@@ -29,6 +33,8 @@ function PartMesh({ part, offset, color, selected, hovered, interactive }: { par
       position={offset}
       castShadow
       receiveShadow
+      onPointerDown={interactive && brushing ? (e) => brushDown(e, part.id, controls) : undefined}
+      onPointerMove={interactive && brushing ? (e) => brushMove(e, part.id) : undefined}
       onPointerOver={interactive ? (e) => (e.stopPropagation(), setUI({ hovered: part.id })) : undefined}
       onPointerOut={interactive ? () => useUI.getState().hovered === part.id && setUI({ hovered: null }) : undefined}
       onClick={
@@ -36,6 +42,7 @@ function PartMesh({ part, offset, color, selected, hovered, interactive }: { par
           ? (e) => {
               e.stopPropagation();
               const { tool } = useUI.getState();
+              if (tool === 'brush') return;
               if (tool === 'paint') {
                 const slot = useUI.getState().activeSlot;
                 dispatch(setPartMeta(part.id, { slot }, `Pintar ${part.name}`));

@@ -49,7 +49,7 @@ export const updateOperation = (op: Operation, label: string, coalesce?: string)
 
 /** Parts produced by an operation (used for cascading deletes). */
 export function producedParts(op: Operation): PartId[] {
-  if (op.kind === 'cut-plane') {
+  if (op.kind !== 'connector') {
     const { a, b } = cutPartIds(op.id);
     return [a, b];
   }
@@ -57,8 +57,7 @@ export function producedParts(op: Operation): PartId[] {
 }
 
 export function consumedParts(op: Operation): PartId[] {
-  if (op.kind === 'cut-plane') return [op.target];
-  return [];
+  return op.kind === 'connector' ? [] : [op.target];
 }
 
 /** Removes an operation and everything that depends on what it produced. */
@@ -90,7 +89,7 @@ export const removeSource = (id: PartId, name: string): Command => ({
   label: `Remover ${name}`,
   apply: (doc) => {
     let ops = doc.operations;
-    for (const op of doc.operations) if (op.kind === 'cut-plane' && op.target === id) ops = removeWithDependents(ops, op.id);
+    for (const op of doc.operations) if (op.kind !== 'connector' && op.target === id) ops = removeWithDependents(ops, op.id);
     return { ...doc, sources: doc.sources.filter((s) => s.id !== id), operations: ops };
   },
 });

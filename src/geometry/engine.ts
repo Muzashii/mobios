@@ -5,7 +5,8 @@ import { CutError, cutByPlane, faceSection } from './cut';
 import { toDisplayMesh } from './display';
 import { planeFrame } from './math';
 import { manifoldToMeshData } from './repair';
-import type { EvalResult, JointInfo, Operation, OpReport, PartId, PartResult, PartStats, SourceRef } from './types';
+import { cutByCutter, cutterReach, profileCutter, strokeCutter } from './cutters';
+import type { CutOperation, EvalResult, JointInfo, Operation, OpReport, PartId, PartResult, PartStats, Plane, SourceRef } from './types';
 import type { Wasm } from './wasm';
 
 interface PartState {
@@ -124,7 +125,7 @@ export class Engine {
   private apply(prev: State, op: Operation): Step {
     const key = JSON.stringify(op);
     try {
-      const state = op.kind === 'cut-plane' ? this.applyCut(prev, op) : this.applyConnector(prev, op);
+      const state = op.kind === 'connector' ? this.applyConnector(prev, op) : this.applyCut(prev, op);
       return { key, opId: op.id, state: state.state, report: { warnings: state.warnings, info: state.info } };
     } catch (e) {
       const message = e instanceof CutError || e instanceof Error ? e.message : String(e);
@@ -132,10 +133,29 @@ export class Engine {
     }
   }
 
-  private applyCut(prev: State, op: Extract<Operation, { kind: 'cut-plane' }>) {
+  /** Runs any cut operation; returns the two halves and the joint geometry. */
+  private cutGeometry(target: Manifold, op: CutOperation) {
+    if (op.kind === 'cut-surface') {
+      const cutter = strokeCutter(this.wasm, op.frame, op.points, cutterReach(target));
+      const res = cutByCutter(this.wasm, target, cutter);
+      cutter.delete();
+      const { a, b } = op.flip ? { a: res.b, b: res.a } : res;
+      return { a, b, planar: false, plane: { origin: op.frame.origin, normal: op.frame.u } as Plane };
+    }
+    if (op.profile && op.profile.amplitude > 0) {
+      if (op.bounded) throw new CutError('Corte limitado ainda não combina com perfil (degrau/zigue-zague/onda).');
+      const cutter = profileCutter(this.wasm, op.plane, op.profile, cutterReach(target));
+      const res = cutByCutter(this.wasm, target, cutter);
+      cutter.delete();
+      return { ...res, planar: false, plane: op.plane };
+    }
+    return { ...cutByPlane(this.wasm, target, op.plane, op.bounded), planar: true, plane: op.plane };
+  }
+
+  private applyCut(prev: State, op: CutOperation) {
     const target = prev.parts.get(op.target);
     if (!target) throw new Error('A parte alvo deste corte não existe mais.');
-    const { a, b } = cutByPlane(this.wasm, target.m, op.plane, op.bounded);
+    const { a, b, planar, plane } = this.cutGeometry(target.m, op);
     const ids = cutPartIds(op.id);
     const fromSource = this.sources.has(op.target);
     const parts = new Map<PartId, PartState>();
@@ -147,13 +167,19 @@ export class Engine {
       parts.set(ids.a, { m: a, name: childName(target.name, 'a', fromSource), version: this.versionSeq++, producedBy: op.id });
       parts.set(ids.b, { m: b, name: childName(target.name, 'b', fromSource), version: this.versionSeq++, producedBy: op.id });
     }
-    const section = faceSection(b, planeFrame(op.plane).toLocal);
-    const faceArea = section.area();
-    section.delete();
+    let faceArea: number;
+    if (planar) {
+      const section = faceSection(b, planeFrame(plane).toLocal);
+      faceArea = section.area();
+      section.delete();
+    } else {
+      // Each half gains the cut surface once.
+      faceArea = Math.max(0, (a.surfaceArea() + b.surfaceArea() - target.m.surfaceArea()) / 2);
+    }
     const cutCount = [...prev.joints.values()].length + 1;
     const joints = new Map(prev.joints);
     const label = `J${cutCount}`;
-    joints.set(op.id, { id: op.id, a: ids.a, b: ids.b, plane: op.plane, bounded: op.bounded, faceArea, label });
+    joints.set(op.id, { id: op.id, a: ids.a, b: ids.b, plane, bounded: op.kind === 'cut-plane' ? op.bounded : undefined, faceArea, label, planar });
     return { state: { parts, joints }, warnings: [] as string[], info: `${faceArea.toFixed(0)} mm² de face` };
   }
 
@@ -162,6 +188,7 @@ export class Engine {
     if (!joint) throw new Error('O corte deste encaixe não existe mais.');
     const a = prev.parts.get(joint.a), b = prev.parts.get(joint.b);
     if (!a || !b) throw new Error('As partes deste encaixe foram cortadas depois; mova o encaixe para logo após o corte.');
+    if (!joint.planar) throw new Error('Encaixes precisam de um corte plano sem perfil — o perfil/curva já trava a montagem.');
     const res = applyConnector(this.wasm, a.m, b.m, joint, op.type, op.params);
     if (res.placed === 0) {
       res.a.delete();

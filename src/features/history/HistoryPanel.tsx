@@ -6,10 +6,16 @@ import { cx } from '../../ui/components';
 import { IconAlert, IconCube, IconCut, IconPin, IconTrash } from '../../ui/icons';
 import { editConnector, editCut } from '../cut/cutActions';
 
+const PROFILE_NAMES = { step: ' em degrau', zigzag: ' em zigue-zague', wave: ' ondulado' } as const;
+
 function describe(op: Operation, index: number, names: Map<string, string>, labels: Map<string, string>) {
   if (op.kind === 'cut-plane') {
     const t = names.get(op.target) ?? 'parte';
-    return { icon: <IconCut size={14} />, title: `Corte ${index}${op.bounded ? ' limitado' : ''}`, sub: t };
+    const profile = op.profile && op.profile.amplitude > 0 ? PROFILE_NAMES[op.profile.kind] : '';
+    return { icon: <IconCut size={14} />, title: `Corte ${index}${op.bounded ? ' limitado' : ''}${profile}`, sub: t };
+  }
+  if (op.kind === 'cut-surface') {
+    return { icon: <IconCut size={14} />, title: `Corte ${index} livre`, sub: names.get(op.target) ?? 'parte' };
   }
   return {
     icon: <IconPin size={14} />,
@@ -47,7 +53,7 @@ export function HistoryPanel() {
           </li>
         ))}
         {doc.operations.map((op) => {
-          if (op.kind === 'cut-plane') cutIndex++;
+          if (op.kind !== 'connector') cutIndex++;
           const d = describe(op, cutIndex, names, labels);
           const rep = reports[op.id];
           const active = draft?.editingOpId === op.id || connectorEdit === op.id;
@@ -56,8 +62,8 @@ export function HistoryPanel() {
               <div
                 role="button"
                 tabIndex={0}
-                onClick={() => (op.kind === 'cut-plane' ? void editCut(op.id) : editConnector(op.id))}
-                onKeyDown={(e) => e.key === 'Enter' && (op.kind === 'cut-plane' ? void editCut(op.id) : editConnector(op.id))}
+                onClick={() => (op.kind !== 'connector' ? void editCut(op.id) : editConnector(op.id))}
+                onKeyDown={(e) => e.key === 'Enter' && (op.kind !== 'connector' ? void editCut(op.id) : editConnector(op.id))}
                 className={cx(
                   'group relative flex h-full w-48 cursor-pointer flex-col justify-center rounded-lg border px-3 py-2 text-left transition-colors',
                   active ? 'border-accent bg-accent-soft' : rep?.error ? 'border-danger/60 bg-danger/5' : 'border-line bg-surface-2 hover:border-muted',

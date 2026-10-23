@@ -34,7 +34,12 @@ export function cutByPlane(wasm: Wasm, part: Manifold, plane: Plane, bounded?: S
   const components = pos.decompose();
   const islands: Manifold[] = [];
   const rest: Manifold[] = [];
+  const sliver = Math.abs(part.volume()) * 1e-6;
   for (const c of components) {
+    if (c.volume() <= sliver) {
+      rest.push(c);
+      continue;
+    }
     const mesh = c.getMesh();
     const vp = mesh.vertProperties;
     const np = mesh.numProp;

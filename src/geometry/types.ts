@@ -55,9 +55,40 @@ export interface SourceRef {
   name: string;
 }
 
+/** Non-flat joint profile across the cut plane: hides the seam and locks rotation. */
+export interface CutProfile {
+  kind: 'step' | 'zigzag' | 'wave';
+  /** Peak-to-peak height along the normal (mm). */
+  amplitude: number;
+  /** Wavelength (zigzag/wave) or unused (step) (mm). */
+  period: number;
+}
+
+/** Orthonormal frame a free-hand stroke was drawn in (u = right, v = up, n = towards viewer). */
+export interface StrokeFrame {
+  origin: Vec3;
+  u: Vec3;
+  v: Vec3;
+  n: Vec3;
+}
+
 export type Operation =
-  | { kind: 'cut-plane'; id: string; target: PartId; plane: Plane; bounded?: SphereBounds }
+  | { kind: 'cut-plane'; id: string; target: PartId; plane: Plane; bounded?: SphereBounds; profile?: CutProfile }
+  | { kind: 'cut-surface'; id: string; target: PartId; frame: StrokeFrame; points: Vec2[]; flip?: boolean }
   | { kind: 'connector'; id: string; joint: string; type: ConnectorType; params: ConnectorParams };
+
+export type CutOperation = Extract<Operation, { kind: 'cut-plane' | 'cut-surface' }>;
+
+/** SmartCut suggestion: a bounded plane at the narrowest concave ring around the seed region. */
+export interface SmartCutSuggestion {
+  plane: Plane;
+  radius: number;
+  /** Ring points (world) for display. */
+  ring: Vec3[];
+  /** Perimeter of the chosen ring (mm). */
+  perimeter: number;
+  confidence: number;
+}
 
 export interface Bounds {
   min: Vec3;
@@ -93,6 +124,8 @@ export interface JointInfo {
   bounded?: SphereBounds;
   faceArea: number;
   label: string;
+  /** Connectors need a flat, unprofiled face. */
+  planar: boolean;
 }
 
 export interface OpReport {

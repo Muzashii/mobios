@@ -1,6 +1,6 @@
 import { exportParts, saveProjectFile } from '../features/export/exportActions';
 import { addCalibration, newProject, openExample, openFilePicker } from '../features/import/importActions';
-import { startCut } from '../features/cut/cutActions';
+import { startBrush, startCut, startDraw } from '../features/cut/cutActions';
 import { setPartMeta } from '../store/commands';
 import { dispatch, useHistory } from '../store/history';
 import { saveDocNow } from '../store/persistence';
@@ -47,7 +47,10 @@ export const APP_COMMANDS: AppCommand[] = [
   { id: 'export-obj', label: 'Exportar todas as partes em OBJ (.zip)', group: 'Exportar', run: () => void exportParts('obj-zip') },
   { id: 'cut', label: 'Corte por plano', shortcut: 'C', group: 'Ferramentas', run: () => startCut() },
   { id: 'select', label: 'Selecionar', shortcut: 'V', group: 'Ferramentas', run: () => setUI({ tool: 'select' }) },
-  { id: 'paint', label: 'Pintar partes (slots de filamento)', shortcut: 'B', group: 'Ferramentas', run: () => setUI({ tool: 'paint', draft: null }) },
+  { id: 'smartcut', label: 'SmartCut — pincelar região e sugerir corte', shortcut: 'S', group: 'Ferramentas', run: () => startBrush() },
+  { id: 'brush', label: 'Pincel de seleção', shortcut: 'B', group: 'Ferramentas', run: () => startBrush() },
+  { id: 'draw', label: 'Corte por curva livre', shortcut: 'L', group: 'Ferramentas', run: () => startDraw() },
+  { id: 'paint', label: 'Pintar partes (slots de filamento)', shortcut: 'T', group: 'Ferramentas', run: () => setUI({ tool: 'paint', draft: null }) },
   { id: 'explode', label: 'Alternar vista explodida', shortcut: 'E', group: 'Visualizar', run: toggleExplode },
   { id: 'focus', label: 'Focar seleção / tudo', shortcut: 'F', group: 'Visualizar', run: () => focus(useUI.getState().selection ?? 'all') },
   { id: 'hide', label: 'Ocultar/mostrar parte selecionada', shortcut: 'H', group: 'Visualizar', run: toggleSelectedVisibility },

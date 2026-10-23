@@ -2,7 +2,7 @@
 import * as Comlink from 'comlink';
 import wasmUrl from 'manifold-3d/manifold.wasm?url';
 import { GeometryService } from './service';
-import type { EvalResult, ExportFormat, ExportPart, ImportedMesh, MeshData, Operation, SourceRef, Technology } from './types';
+import type { Vec3, EvalResult, ExportFormat, ExportPart, ImportedMesh, MeshData, Operation, SourceRef, Technology } from './types';
 import { loadManifold } from './wasm';
 
 const service = loadManifold(wasmUrl).then((wasm) => new GeometryService(wasm));
@@ -32,6 +32,9 @@ const api = {
   async partDisplayBefore(opId: string, partId: string) {
     const mesh = (await service).partDisplayBefore(opId, partId);
     return mesh ? Comlink.transfer(mesh, [mesh.positions.buffer, mesh.normals.buffer] as ArrayBuffer[]) : null;
+  },
+  async smartCut(partId: string, seeds: Vec3[], seedRadius: number, beforeOp?: string) {
+    return (await service).smartCut(partId, seeds, seedRadius, beforeOp);
   },
   async example(id: string) {
     return imported([(await service).example(id)])[0];

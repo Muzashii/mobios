@@ -1,8 +1,8 @@
 import type { BufferGeometry } from 'three';
 import { create } from 'zustand';
-import type { ConnectorParams, ConnectorType, JointInfo, OpReport, PartId, PartStats, Plane } from '../geometry/types';
+import type { ConnectorParams, ConnectorType, CutProfile, JointInfo, OpReport, PartId, PartStats, Plane, StrokeFrame, Vec2, Vec3 } from '../geometry/types';
 
-export type Tool = 'select' | 'cut' | 'paint';
+export type Tool = 'select' | 'cut' | 'paint' | 'brush' | 'draw';
 
 export interface ConnectorDraft {
   enabled: boolean;
@@ -10,9 +10,21 @@ export interface ConnectorDraft {
   params: ConnectorParams;
 }
 
+export interface SurfaceDraft {
+  frame: StrokeFrame;
+  points: Vec2[];
+  flip: boolean;
+}
+
 export interface CutDraft {
   target: PartId;
+  /** 'plane' (optionally profiled/bounded) or a free-hand 'surface'. */
+  mode: 'plane' | 'surface';
   plane: Plane;
+  profile: CutProfile | null;
+  surface?: SurfaceDraft;
+  /** Ring found by SmartCut, shown while the suggestion is reviewed. */
+  smartRing?: Vec3[];
   bounded: boolean;
   radius: number;
   connector: ConnectorDraft;
@@ -42,8 +54,16 @@ export interface Toast {
   detail?: string;
 }
 
+/** SmartCut brush: painted seed points on one part. */
+export interface BrushState {
+  target: PartId | null;
+  seeds: Vec3[];
+  radius: number;
+}
+
 interface UIState {
   tool: Tool;
+  brush: BrushState;
   selection: PartId | null;
   hovered: PartId | null;
   draft: CutDraft | null;
@@ -70,6 +90,7 @@ interface UIState {
 
 export const useUI = create<UIState>(() => ({
   tool: 'select',
+  brush: { target: null, seeds: [], radius: 4 },
   selection: null,
   hovered: null,
   draft: null,

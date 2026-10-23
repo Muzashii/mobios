@@ -1,17 +1,56 @@
 import { CameraControls, GizmoHelper, GizmoViewport, Grid, Line } from '@react-three/drei';
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useThree } from '@react-three/fiber';
+import CameraControlsImpl from 'camera-controls';
 import { useEffect, useMemo, useRef } from 'react';
-import { Box3, Object3D, Vector3 } from 'three';
+import { Box3, BufferGeometry, Mesh, Object3D, Vector3 } from 'three';
+import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh';
 import { useHistory } from '../../store/history';
 import { printerOf } from '../../store/project';
 import { setUI, useUI } from '../../store/ui';
 import { tokens } from '../../ui/tokens';
 import { explodeOffsets } from '../assembly/explode';
+import { BrushLayer } from '../smartcut/BrushLayer';
 import { CutPreview } from './CutPreview';
+import { SurfacePreview } from './SurfacePreview';
+import { viewportRefs } from './viewportRefs';
 import { Parts } from './Parts';
 
 // 3D printing convention: Z is up.
 Object3D.DEFAULT_UP.set(0, 0, 1);
+
+// BVH-accelerated raycasting (hover, selection, brush) on large meshes.
+// Cast: @types/three still declares the older MeshBVH signature for this augmentation.
+BufferGeometry.prototype.computeBoundsTree = computeBoundsTree as unknown as BufferGeometry['computeBoundsTree'];
+BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
+Mesh.prototype.raycast = acceleratedRaycast;
+
+/** Builds BVHs off the critical path, after new parts arrive. */
+function useBoundsTrees() {
+  const parts = useUI((s) => s.parts);
+  useEffect(() => {
+    const pending = parts.filter((p) => !p.geometry.boundsTree);
+    if (!pending.length) return;
+    const idle = (cb: () => void) => ('requestIdleCallback' in window ? requestIdleCallback(cb) : setTimeout(cb, 50));
+    let i = 0;
+    const step = () => {
+      const p = pending[i++];
+      if (!p) return;
+      if (!p.geometry.boundsTree) p.geometry.computeBoundsTree();
+      idle(step);
+    };
+    idle(step);
+  }, [parts]);
+}
+
+function CameraBridge() {
+  const camera = useThree((s) => s.camera);
+  const canvas = useThree((s) => s.gl.domElement);
+  useEffect(() => {
+    viewportRefs.camera = camera;
+    viewportRefs.canvas = canvas;
+  }, [camera, canvas]);
+  return null;
+}
 
 function useSceneBox() {
   const parts = useUI((s) => s.parts);
@@ -52,6 +91,17 @@ function CameraRig() {
     void controls.current?.setLookAt(-220, -260, 200, 0, 0, 40, false);
   }, []);
 
+  // Brush and free-hand tools own the left button; orbit moves to the right button.
+  const tool = useUI((s) => s.tool);
+  useEffect(() => {
+    const c = controls.current;
+    if (!c) return;
+    const { ACTION } = CameraControlsImpl;
+    const painting = tool === 'brush';
+    c.mouseButtons.left = painting ? ACTION.NONE : ACTION.ROTATE;
+    c.mouseButtons.right = painting ? ACTION.ROTATE : ACTION.TRUCK;
+  }, [tool]);
+
   return <CameraControls ref={controls} makeDefault smoothTime={0.28} draggingSmoothTime={0.08} dollyToCursor />;
 }
 
@@ -87,6 +137,7 @@ function Scene() {
   const theme = useUI((s) => s.theme);
   const box = useSceneBox();
   const offsets = useMemo(() => explodeOffsets(parts, explode), [parts, explode]);
+  useBoundsTrees();
   const t = tokens[theme];
   const gridZ = box.isEmpty() ? 0 : box.min.z - 0.05;
   const span = box.isEmpty() ? 200 : Math.max(200, box.getSize(new Vector3()).length() * 3);
@@ -115,7 +166,9 @@ function Scene() {
       <BedVolume />
 
       <Parts offsets={offsets} hiddenId={draft?.target} />
-      {draft && <CutPreview draft={draft} />}
+      {draft && (draft.mode === 'surface' ? <SurfacePreview draft={draft} /> : <CutPreview draft={draft} />)}
+      <BrushLayer />
+      <CameraBridge />
 
       <CameraRig />
       <GizmoHelper alignment="bottom-right" margin={[64, 64]}>

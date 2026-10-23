@@ -5,7 +5,7 @@ import { printerOf } from '../../store/project';
 import { focus, useUI, type ViewPart } from '../../store/ui';
 import { Button, Field, Kbd, Section, mm } from '../../ui/components';
 import { IconAlert, IconCheck, IconCut, IconEye, IconEyeOff, IconFocus, IconTrash } from '../../ui/icons';
-import { startCut } from '../cut/cutActions';
+import { startBrush, startCut } from '../cut/cutActions';
 import { SlotPicker } from '../paint/SlotPicker';
 
 export function fitsPrinter(size: number[], volume: number[]) {
@@ -55,6 +55,9 @@ export function PartInspector({ part }: { part: ViewPart }) {
         <div className="flex flex-wrap gap-1.5 pt-1">
           <Button size="sm" variant="primary" onClick={() => startCut(part.id)}>
             <IconCut size={14} /> Cortar <Kbd>C</Kbd>
+          </Button>
+          <Button size="sm" onClick={() => startBrush(part.id)}>
+            SmartCut <Kbd>S</Kbd>
           </Button>
           <Button size="sm" onClick={() => focus(part.id)}>
             <IconFocus size={14} /> Focar

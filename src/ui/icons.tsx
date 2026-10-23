@@ -36,6 +36,14 @@ export const IconPin = make(
     <path d="M10 9v8l2 4 2-4V9" />
   </>,
 );
+export const IconBrush = make(
+  <>
+    <path d="M14 4l6 6-8.5 8.5a3 3 0 0 1-2 .9L6 19.5a1 1 0 0 1-1-1l.1-3.5a3 3 0 0 1 .9-2z" />
+    <path d="M12 6l6 6" />
+    <path d="M3 21c1.5 0 3-.5 3-2" />
+  </>,
+);
+export const IconPen = make(<path d="M3 17c3-6 6 2 9-4s5-6 9-6M3 21h18" />);
 export const IconPaint = make(
   <>
     <path d="M19 11h-1a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h9" />

@@ -1,7 +1,7 @@
 import { Box3, Matrix4, Quaternion, Vector3 } from 'three';
 import { geometry } from '../../geometry/client';
 import { defaultConnectorParams } from '../../geometry/connectors';
-import type { Operation, PartId, Plane, Vec3 } from '../../geometry/types';
+import type { CutOperation, CutProfile, Operation, PartId, Plane, StrokeFrame, Vec2, Vec3 } from '../../geometry/types';
 import { addOperation, batch, insertOperationAfter, removeOperation, updateOperation, type Command } from '../../store/commands';
 import { dispatch, getDoc } from '../../store/history';
 import { newId } from '../../store/project';
@@ -35,39 +35,111 @@ function connectorDefaults() {
   return { ...defaultConnectorParams(doc.technology), clearance: doc.clearance[doc.technology] };
 }
 
-/** Enters the cut tool on a part (selection, or the only part). */
-export function startCut(partId?: PartId) {
+export const DEFAULT_PROFILE: CutProfile = { kind: 'zigzag', amplitude: 4, period: 12 };
+
+/** Part the tools act on: explicit id, selection, or the only visible part. */
+export function resolveTarget(partId?: PartId): PartId | null {
   const { parts, selection } = useUI.getState();
   const doc = getDoc();
   const visible = parts.filter((p) => doc.partMeta[p.id]?.visible !== false);
   const id = partId ?? selection ?? (visible.length === 1 ? visible[0].id : null);
   if (!id) {
-    toast('info', 'Selecione uma parte para cortar', 'Clique numa parte no viewport ou na lista de partes.');
-    return;
+    toast('info', 'Selecione uma parte primeiro', 'Clique numa parte no viewport ou na lista de partes.');
+    return null;
   }
   if (doc.partMeta[id]?.locked) {
     toast('warning', 'Parte travada', 'Destrave a parte na lista para cortá-la.');
-    return;
+    return null;
   }
+  return id;
+}
+
+function baseDraft(target: PartId, plane: Plane, radius: number): CutDraft {
+  return {
+    target,
+    mode: 'plane',
+    plane,
+    profile: null,
+    bounded: false,
+    radius,
+    connector: { enabled: true, type: 'pin', params: connectorDefaults() },
+  };
+}
+
+/** Enters the plane-cut tool on a part (selection, or the only part). */
+export function startCut(partId?: PartId) {
+  const id = resolveTarget(partId);
+  if (!id) return;
   const box = partBox(id);
   if (!box) return;
   const center = box.getCenter(new Vector3());
   const size = box.getSize(new Vector3());
-  const draft: CutDraft = {
-    target: id,
-    plane: { origin: center.toArray() as Vec3, normal: [0, 0, 1] },
-    bounded: false,
-    radius: Math.max(size.x, size.y, size.z) * 0.3,
-    connector: { enabled: true, type: 'pin', params: connectorDefaults() },
-  };
+  const draft = baseDraft(id, { origin: center.toArray() as Vec3, normal: [0, 0, 1] }, Math.max(size.x, size.y, size.z) * 0.3);
   setUI({ tool: 'cut', draft, selection: id, connectorEdit: null });
+}
+
+/** SmartCut brush: paint (or click) the region to separate, then ask for a suggestion. */
+export function startBrush(partId?: PartId) {
+  const { selection, brush } = useUI.getState();
+  cancelCut();
+  const target = partId ?? selection ?? null;
+  setUI({ tool: 'brush', explode: 0, connectorEdit: null, brush: { ...brush, target, seeds: brush.target === target ? brush.seeds : [] } });
+}
+
+export function clearBrush() {
+  const { brush } = useUI.getState();
+  setUI({ brush: { ...brush, seeds: [] } });
+}
+
+export async function suggestFromBrush() {
+  const { brush } = useUI.getState();
+  if (!brush.target || brush.seeds.length === 0) {
+    toast('info', 'Pincele a região que quer separar', 'Ex.: passe o pincel sobre o braço — ou só clique na ponta dele.');
+    return;
+  }
+  setUI({ busy: true, busyLabel: 'Procurando a articulação…' });
+  try {
+    const s = await geometry().smartCut(brush.target, brush.seeds, brush.radius);
+    const draft = baseDraft(brush.target, s.plane, s.radius);
+    draft.bounded = true;
+    draft.smartRing = s.ring;
+    setUI({ tool: 'cut', draft, selection: brush.target, brush: { ...brush, seeds: [] } });
+    toast(
+      s.confidence > 0.35 ? 'success' : 'info',
+      s.confidence > 0.35 ? 'Articulação encontrada' : 'Sugestão de corte (confiança baixa)',
+      `Anel de ${s.perimeter.toFixed(0)} mm. Ajuste o plano se quiser e pressione Enter.`,
+    );
+  } catch (e) {
+    toast('warning', 'SmartCut não encontrou um corte', e instanceof Error ? e.message : String(e), 7000);
+  } finally {
+    setUI({ busy: false });
+  }
+}
+
+/** Free-hand tool: the next stroke on the viewport becomes a cut surface. */
+export function startDraw(partId?: PartId) {
+  const id = resolveTarget(partId);
+  if (!id) return;
+  cancelCut();
+  setUI({ tool: 'draw', selection: id, connectorEdit: null });
+}
+
+export function finishStroke(frame: StrokeFrame, points: Vec2[]) {
+  const { selection } = useUI.getState();
+  if (!selection || points.length < 2) return;
+  const box = partBox(selection);
+  const draft = baseDraft(selection, { origin: frame.origin, normal: frame.u }, box ? box.getSize(new Vector3()).length() * 0.3 : 30);
+  draft.mode = 'surface';
+  draft.surface = { frame, points, flip: false };
+  draft.connector = { ...draft.connector, enabled: false };
+  setUI({ tool: 'cut', draft });
 }
 
 /** Re-opens an existing cut for editing (later operations recompute on commit). */
 export async function editCut(opId: string) {
   const doc = getDoc();
-  const op = doc.operations.find((o) => o.id === opId);
-  if (!op || op.kind !== 'cut-plane') return;
+  const op = doc.operations.find((o): o is CutOperation => o.id === opId && o.kind !== 'connector');
+  if (!op) return;
   const connector = doc.operations.find((o): o is Extract<Operation, { kind: 'connector' }> => o.kind === 'connector' && o.joint === opId);
   const mesh = await geometry().partDisplayBefore(opId, op.target);
   if (!mesh) {
@@ -77,23 +149,20 @@ export async function editCut(opId: string) {
   const previewGeometry = toBufferGeometry(mesh);
   const size = previewGeometry.boundingBox!.getSize(new Vector3());
   useUI.getState().draft?.previewGeometry?.dispose();
-  setUI({
-    tool: 'cut',
-    connectorEdit: null,
-    selection: null,
-    draft: {
-      target: op.target,
-      plane: op.plane,
-      bounded: !!op.bounded,
-      radius: op.bounded?.radius ?? Math.max(size.x, size.y, size.z) * 0.3,
-      connector: connector
-        ? { enabled: true, type: connector.type, params: connector.params }
-        : { enabled: false, type: 'pin', params: connectorDefaults() },
-      editingOpId: opId,
-      connectorOpId: connector?.id,
-      previewGeometry,
-    },
-  });
+  const draft = baseDraft(op.target, op.kind === 'cut-plane' ? op.plane : { origin: op.frame.origin, normal: op.frame.u }, Math.max(size.x, size.y, size.z) * 0.3);
+  draft.editingOpId = opId;
+  draft.previewGeometry = previewGeometry;
+  draft.connectorOpId = connector?.id;
+  draft.connector = connector ? { enabled: true, type: connector.type, params: connector.params } : { ...draft.connector, enabled: false };
+  if (op.kind === 'cut-plane') {
+    draft.bounded = !!op.bounded;
+    draft.radius = op.bounded?.radius ?? draft.radius;
+    draft.profile = op.profile ?? null;
+  } else {
+    draft.mode = 'surface';
+    draft.surface = { frame: op.frame, points: op.points, flip: !!op.flip };
+  }
+  setUI({ tool: 'cut', connectorEdit: null, selection: null, draft });
 }
 
 export function updateDraft(patch: Partial<CutDraft>) {
@@ -103,8 +172,27 @@ export function updateDraft(patch: Partial<CutDraft>) {
 
 export function cancelCut() {
   useUI.getState().draft?.previewGeometry?.dispose();
-  setUI({ draft: null, tool: 'select' });
+  const { tool } = useUI.getState();
+  setUI({ draft: null, tool: tool === 'cut' || tool === 'draw' ? 'select' : tool });
 }
+
+function draftToOperation(draft: CutDraft, id: string): CutOperation {
+  if (draft.mode === 'surface' && draft.surface) {
+    return { kind: 'cut-surface', id, target: draft.target, frame: draft.surface.frame, points: draft.surface.points, ...(draft.surface.flip ? { flip: true } : {}) };
+  }
+  const profiled = draft.profile && draft.profile.amplitude > 0;
+  return {
+    kind: 'cut-plane',
+    id,
+    target: draft.target,
+    plane: draft.plane,
+    ...(draft.bounded && !profiled ? { bounded: { center: draft.plane.origin, radius: draft.radius } } : {}),
+    ...(profiled ? { profile: draft.profile! } : {}),
+  };
+}
+
+/** Connectors need a flat, unprofiled plane cut. */
+export const draftAllowsConnector = (d: CutDraft) => d.mode === 'plane' && !(d.profile && d.profile.amplitude > 0);
 
 export function commitCut() {
   const draft = useUI.getState().draft;
@@ -112,23 +200,18 @@ export function commitCut() {
   const doc = getDoc();
   const editing = draft.editingOpId;
   const cutId = editing ?? newId('c');
-  const cut: Operation = {
-    kind: 'cut-plane',
-    id: cutId,
-    target: draft.target,
-    plane: draft.plane,
-    ...(draft.bounded ? { bounded: { center: draft.plane.origin, radius: draft.radius } } : {}),
-  };
-  const cmds: Command[] = [editing ? updateOperation(cut, 'Editar corte') : addOperation(cut, 'Corte por plano')];
+  const cut = draftToOperation(draft, cutId);
+  const cmds: Command[] = [editing ? updateOperation(cut, 'Editar corte') : addOperation(cut, 'Corte')];
   const c = draft.connector;
-  if (c.enabled) {
+  const withConnector = c.enabled && draftAllowsConnector(draft);
+  if (withConnector) {
     const op: Operation = { kind: 'connector', id: draft.connectorOpId ?? newId('k'), joint: cutId, type: c.type, params: c.params };
     cmds.push(draft.connectorOpId ? updateOperation(op, 'Editar encaixe') : insertOperationAfter(cutId, op, 'Encaixe'));
   } else if (draft.connectorOpId) {
     cmds.push(removeOperation(draft.connectorOpId, 'Remover encaixe'));
   }
-  const n = doc.operations.filter((o) => o.kind === 'cut-plane').length + (editing ? 0 : 1);
-  dispatch(batch(editing ? 'Editar corte' : `Corte ${n}${c.enabled ? ' + encaixe' : ''}`, cmds));
+  const n = doc.operations.filter((o) => o.kind !== 'connector').length + (editing ? 0 : 1);
+  dispatch(batch(editing ? 'Editar corte' : `Corte ${n}${withConnector ? ' + encaixe' : ''}`, cmds));
   draft.previewGeometry?.dispose();
   setUI({ draft: null, tool: 'select', selection: null });
 }
@@ -146,6 +229,10 @@ export function snapAxis(axis: 0 | 1 | 2) {
 export function flipNormal() {
   const draft = useUI.getState().draft;
   if (!draft) return;
+  if (draft.mode === 'surface' && draft.surface) {
+    updateDraft({ surface: { ...draft.surface, flip: !draft.surface.flip } });
+    return;
+  }
   const [x, y, z] = draft.plane.normal;
   updateDraft({ plane: { ...draft.plane, normal: [-x, -y, -z] } });
 }
@@ -161,5 +248,5 @@ export function draftOffsetRange(draft: CutDraft) {
 
 export function editConnector(opId: string) {
   cancelCut();
-  setUI({ connectorEdit: opId, selection: null });
+  setUI({ connectorEdit: opId, selection: null, tool: 'select' });
 }

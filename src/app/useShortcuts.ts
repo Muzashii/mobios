@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { cancelCut, commitCut } from '../features/cut/cutActions';
+import { cancelCut, commitCut, suggestFromBrush } from '../features/cut/cutActions';
 import { useHistory } from '../store/history';
 import { setUI, useUI } from '../store/ui';
 import { runCommand } from './commands';
@@ -31,7 +31,19 @@ export function useShortcuts() {
       }
       if (e.altKey) return;
 
-      const { draft } = useUI.getState();
+      const { draft, tool, brush } = useUI.getState();
+      if (tool === 'brush') {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          void suggestFromBrush();
+          return;
+        }
+        if (e.key === '[' || e.key === ']') {
+          const radius = Math.max(0.5, Math.min(60, brush.radius * (e.key === ']' ? 1.25 : 0.8)));
+          setUI({ brush: { ...brush, radius } });
+          return;
+        }
+      }
       if (draft) {
         if (e.key === 'Enter') {
           e.preventDefault();
@@ -43,7 +55,7 @@ export function useShortcuts() {
         setUI({ selection: null, connectorEdit: null, tool: 'select' });
         return;
       }
-      const single: Record<string, string> = { c: 'cut', v: 'select', b: 'paint', e: 'explode', f: 'focus', h: 'hide' };
+      const single: Record<string, string> = { c: 'cut', s: 'smartcut', b: 'brush', l: 'draw', t: 'paint', v: 'select', e: 'explode', f: 'focus', h: 'hide' };
       if (single[key]) {
         e.preventDefault();
         runCommand(single[key]);

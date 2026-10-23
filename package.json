@@ -24,6 +24,7 @@
     "@radix-ui/react-tooltip": "^1.4.1",
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.2",
+    "camera-controls": "^3.1.2",
     "comlink": "^4.4.2",
     "fflate": "^0.8.3",
     "framer-motion": "^14.6.0",
@@ -32,6 +33,7 @@
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "three": "^0.186.1",
+    "three-mesh-bvh": "^0.9.16",
     "zustand": "^5.0.16"
   },
   "devDependencies": {

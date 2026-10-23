@@ -1,5 +1,6 @@
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { lazy, Suspense, useEffect } from 'react';
+import { StrokeOverlay } from '../features/cut/StrokeOverlay';
 import { HistoryPanel } from '../features/history/HistoryPanel';
 import { useUI } from '../store/ui';
 import { ViewportBoundary } from './ViewportBoundary';
@@ -33,6 +34,7 @@ export function App() {
               <LazyViewport />
             </ViewportBoundary>
           </Suspense>
+          <StrokeOverlay />
           <div className="pointer-events-none absolute inset-0">
             <EmptyState />
             <ToolHint />

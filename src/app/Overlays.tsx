@@ -73,7 +73,10 @@ export function ToolHint() {
     );
   }
   let text: React.ReactNode = null;
-  if (draft) text = <>Arraste as setas para mover e os arcos para girar · <Kbd>Enter</Kbd> corta · <Kbd>Esc</Kbd> cancela</>;
+  if (tool === 'brush') text = <>Pincele com o botão esquerdo · gire com o direito · <Kbd>Enter</Kbd> sugere o corte</>;
+  else if (tool === 'draw') text = <>Desenhe um traço atravessando a peça · <Kbd>Esc</Kbd> cancela</>;
+  else if (draft?.mode === 'surface') text = <><Kbd>Enter</Kbd> corta · <Kbd>Esc</Kbd> cancela</>;
+  else if (draft) text = <>Arraste as setas para mover e os arcos para girar · <Kbd>Enter</Kbd> corta · <Kbd>Esc</Kbd> cancela</>;
   else if (count > 0 && !selection && ops === 0) text = <>Clique numa parte e pressione <Kbd>C</Kbd> para cortar</>;
   else if (selection && ops === 0) text = <>Pressione <Kbd>C</Kbd> para cortar esta parte</>;
   if (!text) return null;
