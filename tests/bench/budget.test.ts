@@ -68,3 +68,41 @@ it('reports the other pipeline stages at 500k triangles', async () => {
   expect(display).toBeLessThan(1500);
   sphere.delete();
 });
+
+it('SmartCut v2 on a ~500k-triangle figure: suggestion, hover and region cut', async () => {
+  const { exampleFigure } = await import('../../src/geometry/primitives');
+  const { GeometryService } = await import('../../src/geometry/service');
+  const { clearRegionContexts } = await import('../../src/geometry/smartcut');
+  const wasm = await loadManifold();
+  const base = exampleFigure(wasm);
+  const fig = base.refineToLength(0.38);
+  base.delete();
+  const svc = new GeometryService(wasm);
+  svc.engine.addSource('s', fig);
+  svc.evaluate([{ id: 's', name: 'f' }], []);
+  clearRegionContexts();
+  const tris = fig.numTri();
+  let t0 = performance.now();
+  const s = svc.smartCut('s', [[0, -13, 98]], 4);
+  const first = performance.now() - t0; // includes building the proxy + BVH (once per part)
+  t0 = performance.now();
+  const arm = svc.smartCut('s', [[28, -5.4, 62]], 4);
+  const cached = performance.now() - t0;
+  t0 = performance.now();
+  const h = svc.smartHover('s', [-35, -6.5, 50], 4);
+  const hover = performance.now() - t0;
+  expect(h).not.toBeNull();
+  expect(s.candidates[0].name).toBe('Cabeça');
+  expect(arm.candidates[0].plane.origin[2]).toBeGreaterThan(66);
+  t0 = performance.now();
+  const c = s.candidates[0];
+  const r = svc.evaluate([{ id: 's', name: 'f' }], [{ kind: 'cut-region', id: 'c1', target: 's', balls: s.balls, seeds: s.seeds, level: c.level, mode: 'auto', plane: c.plane }]);
+  const cut = performance.now() - t0;
+  console.table({ triângulos: tris, 'sugestão 1ª vez (ms)': first.toFixed(0), 'sugestão com cache (ms)': cached.toFixed(0), 'hover (ms)': hover.toFixed(0), 'corte por região (ms)': cut.toFixed(0) });
+  expect(r.reports.c1.error).toBeUndefined();
+  expect(tris).toBeGreaterThan(400_000);
+  // Plan targets: suggestion < 1.5 s at 500k; cut < 2 s (generous ceilings for CI noise).
+  expect(first).toBeLessThan(4000);
+  expect(cut).toBeLessThan(6000);
+  svc.engine.dispose();
+}, 300_000);

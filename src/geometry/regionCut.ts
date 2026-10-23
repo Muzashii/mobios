@@ -54,14 +54,39 @@ export function splitRegion(ctx: RegionContext, labels: Uint8Array, opts: { mode
     for (let i = 0; i < loopsIdx.length; i++) {
       const isMain = loops[i] === main;
       const plane = isMain ? fit.plane : fitPlane(loops[i], opts.towards).plane;
-      const cap = buildCap(loopsIdx[i], plane, pos, ctx.edge, isMain);
-      if (isMain) {
-        faceRadius = cap.flatRadius;
-        origin = cap.centre;
+      // Cap variants, best first: flat centre (pins), plain blend, then domes bulging into B
+      // (away from a body that comes close to the joint, e.g. the torso next to an armpit).
+      const variants = [
+        { flat: isMain, bulge: 0 },
+        { flat: false, bulge: 0 },
+        { flat: false, bulge: 0.35 },
+        { flat: false, bulge: 0.7 },
+      ];
+      let done = false;
+      for (const v of variants) {
+        const mark = pos.length;
+        let cap: ReturnType<typeof buildCap>;
+        try {
+          cap = buildCap(loopsIdx[i], plane, pos, ctx.edge, v.flat, v.bulge);
+        } catch (e) {
+          pos.length = mark;
+          if (e instanceof LoopError) continue;
+          throw e;
+        }
+        if (capPierces(ctx, pos, cap.tris)) {
+          pos.length = mark;
+          continue;
+        }
+        if (isMain) {
+          faceRadius = cap.flatRadius;
+          origin = cap.centre;
+        }
+        bTris.push(...cap.tris);
+        for (let k = 0; k < cap.tris.length; k += 3) aTris.push(cap.tris[k], cap.tris[k + 2], cap.tris[k + 1]);
+        done = true;
+        break;
       }
-      bTris.push(...cap.tris);
-      for (let k = 0; k < cap.tris.length; k += 3) aTris.push(cap.tris[k], cap.tris[k + 2], cap.tris[k + 1]);
-      if (capPierces(ctx, pos, cap.tris)) throw new LoopError('A tampa curva atravessa a superfície da peça.');
+      if (!done) throw new LoopError('A tampa curva atravessa a superfície da peça.');
     }
   }
   const P = Float32Array.from(pos);
@@ -91,7 +116,7 @@ const smoothstep = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x)
  * Cap across one boundary loop (triangles oriented for B). Star-shaped loops get concentric
  * rings with a flat centre; others an ear-clipped polygon.
  */
-export function buildCap(loop: number[], plane: Plane, pos: number[], edge: number, flatCentre: boolean): { tris: number[]; flatRadius: number; centre: Vec3 } {
+export function buildCap(loop: number[], plane: Plane, pos: number[], edge: number, flatCentre: boolean, bulge = 0): { tris: number[]; flatRadius: number; centre: Vec3 } {
   const { u, v, n, origin } = planeFrame(plane);
   const N = loop.length;
   const local = loop.map((i) => {
@@ -154,10 +179,12 @@ export function buildCap(loop: number[], plane: Plane, pos: number[], edge: numb
   for (let k = 1; k < K; k++) {
     const s = k / K;
     const w = s0 > 0 ? smoothstep((s - s0) / (1 - s0)) : s;
-    rings.push(q.map(([x, y], i) => toWorld(cx + (x - cx) * s, cy + (y - cy) * s, zc + (local[i][2] - zc) * w)));
+    // Dome: bulge·ρ at the centre, fading to 0 at the ring.
+    const dome = bulge * rho * (1 - s * s);
+    rings.push(q.map(([x, y], i) => toWorld(cx + (x - cx) * s, cy + (y - cy) * s, zc + (local[i][2] - zc) * w + dome)));
   }
   rings.push(loop);
-  const centre = toWorld(cx, cy, zc);
+  const centre = toWorld(cx, cy, zc + bulge * rho);
   const centrePoint: Vec3 = [pos[centre * 3], pos[centre * 3 + 1], pos[centre * 3 + 2]];
   const tris: number[] = [];
   const inner = rings[0];
@@ -315,8 +342,7 @@ function toSolids(wasm: Wasm, part: Manifold, split: RegionSplit, shell: boolean
  */
 export function cutRegion(wasm: Wasm, part: Manifold, ctx: RegionContext, op: RegionCutOperation): RegionCutResult {
   const field = regionField(ctx, op.balls, op.seeds, op.negSeeds);
-  const band = Math.max(ctx.edge * 2, Math.min(op.level * 0.35, ctx.diag * 0.05));
-  const labels = labelFaces(ctx, field, op.level, band);
+  const labelsAt = (level: number) => labelFaces(ctx, field, level, Math.max(ctx.edge * 2, Math.min(level * 0.35, ctx.diag * 0.05)));
   const warnings: string[] = [];
   const planeFallback = (why: string): RegionCutResult => {
     const res = cutByPlane(wasm, part, op.plane, undefined, op.seeds);
@@ -328,14 +354,24 @@ export function cutRegion(wasm: Wasm, part: Manifold, ctx: RegionContext, op: Re
     return { ...res, plane: op.plane, planar: true, used: 'plane', warnings };
   }
   const shell = op.mode === 'shell';
-  try {
-    const split = splitRegion(ctx, labels, { mode: shell ? 'shell' : 'surface', depth: op.depth, towards: field.centroid });
-    const { a, b } = toSolids(wasm, part, split, shell);
-    const faceRadius = split.faceRadius >= 1.5 ? split.faceRadius : undefined;
-    return { a, b, plane: split.plane, faceRadius, planar: !shell && !!faceRadius, used: shell ? 'shell' : 'surface', warnings };
-  } catch (e) {
-    if (op.mode === 'auto' && (e instanceof LoopError || e instanceof CutError)) return planeFallback(e.message.replace(/\.$/, '').toLowerCase());
-    if (e instanceof LoopError) throw new CutError(e.message, shell ? 'smaller-depth' : 'use-region');
-    throw e;
+  // The stored level first; if its cap cannot close, the ring a little further along or back
+  // usually can (the surface next to a joint is rarely bad on both sides).
+  const levels = shell ? [op.level] : [op.level, op.level * 1.15, op.level * 0.87, op.level * 1.3];
+  let last: unknown;
+  for (const level of levels) {
+    try {
+      const split = splitRegion(ctx, labelsAt(level), { mode: shell ? 'shell' : 'surface', depth: op.depth, towards: field.centroid });
+      const { a, b } = toSolids(wasm, part, split, shell);
+      const faceRadius = split.faceRadius >= 1.5 ? split.faceRadius : undefined;
+      if (level !== op.level) warnings.push(`Emenda deslocada ${Math.abs(level - op.level).toFixed(1)} mm para a tampa caber.`);
+      return { a, b, plane: split.plane, faceRadius, planar: !shell && !!faceRadius, used: shell ? 'shell' : 'surface', warnings };
+    } catch (e) {
+      if (!(e instanceof LoopError || e instanceof CutError)) throw e;
+      last = e;
+    }
   }
+  const e = last as Error;
+  if (op.mode === 'auto') return planeFallback(e.message.replace(/\.$/, '').toLowerCase());
+  if (e instanceof LoopError) throw new CutError(e.message, shell ? 'smaller-depth' : 'use-region');
+  throw e;
 }

@@ -182,6 +182,13 @@ export function regionContext(m: Manifold, purpose: 'suggest' | 'apply'): Region
       work = s;
       if (s.numTri() <= 300_000) break;
     }
+    // Simplification leaves long slivers on flat areas: resample evenly so geodesic rings and
+    // concavity behave like on the original.
+    if (maxEdge(work) > diag / 60) {
+      const even = work.refineToLength(diag / 150);
+      if (work !== m) work.delete();
+      work = even;
+    }
   } else if (m.numTri() < 150_000 && maxEdge(m) > diag / 40) {
     work = m.refineToLength(diag / 120);
   }

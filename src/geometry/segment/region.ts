@@ -187,8 +187,11 @@ export function seedBalls(ctx: RegionContext, seeds: Vec3[], brushRadius: number
       const ang = (k / 8) * Math.PI * 2;
       dirs.push(norm([0, 1, 2].map((j) => inward[j] + tn * (Math.cos(ang) * a[j] + Math.sin(ang) * b[j])) as Vec3));
     }
+    // Skip the first fraction of an edge: on a noisy scan the ray would otherwise hit the
+    // surface's own roughness right next to the dab.
+    const near = Math.max(eps * 4, ctx.edge * 0.3);
     for (const d of dirs) {
-      const h = query.first(o, d, eps * 4);
+      const h = query.first(o, d, near);
       if (!h) continue;
       const cos = d[0] * inward[0] + d[1] * inward[1] + d[2] * inward[2];
       if (d === inward) axis = h.distance;
@@ -255,6 +258,14 @@ export interface Field {
 }
 
 export function regionField(ctx: RegionContext, balls: RegionBall[], seeds: Vec3[], negSeeds: Vec3[] = []): Field {
+  // A ball never reaches a negative seed: "keep this with the body" wins over the SDF guess.
+  if (negSeeds.length) {
+    balls = balls.map((b) => {
+      let r = b.r;
+      for (const n of negSeeds) r = Math.min(r, Math.hypot(n[0] - b.c[0], n[1] - b.c[1], n[2] - b.c[2]) * 0.85);
+      return r === b.r ? b : { ...b, r };
+    });
+  }
   const inR = regionVertices(ctx, balls);
   const src: number[] = [];
   const c: Vec3 = [0, 0, 0];
@@ -448,8 +459,11 @@ export function labelFaces(ctx: RegionContext, field: Field, level: number, band
     // Band faces: near the level, plus every face whose label disagrees with a neighbour's.
     const idx = new Int32Array(nf).fill(-1);
     const nodes: number[] = [];
+    // The band never reaches into the seed region itself (it stays B and feeds the source):
+    // otherwise the cheapest cut is a tiny loop around the clicked point.
+    const lo = Math.max(level - band, level * 0.5);
     for (let f = 0; f < nf; f++) {
-      if (Math.abs(fd[f] - level) <= band) { idx[f] = nodes.length; nodes.push(f); }
+      if (fd[f] >= lo && fd[f] <= level + band) { idx[f] = nodes.length; nodes.push(f); }
     }
     if (nodes.length > 0 && nodes.length < nf) {
       const S = nodes.length, T = nodes.length + 1;
