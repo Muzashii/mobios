@@ -4,8 +4,8 @@ import { dispatch, useHistory } from '../../store/history';
 import { useUI } from '../../store/ui';
 import { cx } from '../../ui/components';
 import { CONNECTOR_TYPES } from '../../geometry/connectors';
-import { IconAlert, IconCube, IconCut, IconHash, IconPin, IconTrash } from '../../ui/icons';
-import { editConnector, editCut } from '../cut/cutActions';
+import { IconAlert, IconBrush, IconCube, IconCut, IconHash, IconPin, IconTrash } from '../../ui/icons';
+import { editConnector, editCut, HINTS } from '../cut/cutActions';
 
 const PROFILE_NAMES = { step: ' em degrau', zigzag: ' em zigue-zague', wave: ' ondulado' } as const;
 
@@ -14,6 +14,10 @@ function describe(op: Operation, index: number, names: Map<string, string>, labe
     const t = names.get(op.target) ?? 'parte';
     const profile = op.profile && op.profile.amplitude > 0 ? PROFILE_NAMES[op.profile.kind] : '';
     return { icon: <IconCut size={14} />, title: `Corte ${index}${op.bounded ? ' limitado' : ''}${profile}`, sub: t };
+  }
+  if (op.kind === 'cut-region') {
+    const how = op.mode === 'shell' ? ' em casca' : op.mode === 'plane' ? ' plano' : '';
+    return { icon: <IconBrush size={14} />, title: `${op.name && op.name !== 'Parte' ? op.name : `Corte ${index}`} · SmartCut${how}`, sub: names.get(op.target) ?? 'parte' };
   }
   if (op.kind === 'cut-surface') {
     return { icon: <IconCut size={14} />, title: `Corte ${index} livre`, sub: names.get(op.target) ?? 'parte' };
@@ -58,10 +62,11 @@ export function HistoryPanel() {
               <IconCube size={14} /> Importar
             </div>
             <div className="truncate text-xs">{s.name}</div>
+            {s.repair && <div className="truncate text-[10px] text-muted" title={s.repair}>Raio-X: {s.repair}</div>}
           </li>
         ))}
         {doc.operations.map((op) => {
-          const isCut = op.kind === 'cut-plane' || op.kind === 'cut-surface';
+          const isCut = op.kind === 'cut-plane' || op.kind === 'cut-surface' || op.kind === 'cut-region';
           if (isCut) cutIndex++;
           const d = describe(op, cutIndex, names, labels);
           const rep = reports[op.id];
@@ -82,7 +87,10 @@ export function HistoryPanel() {
                   <span className={rep?.error ? 'text-danger' : 'text-accent'}>{rep?.error ? <IconAlert size={14} /> : d.icon}</span>
                   <span className="font-medium">{d.title}</span>
                 </div>
-                <div className="truncate text-[11px] text-muted">{rep?.error ?? d.sub}</div>
+                <div className={cx('truncate text-[11px]', rep?.error ? 'text-danger' : 'text-muted')} title={rep?.error}>{rep?.error ?? d.sub}</div>
+                {rep?.error && isCut && (
+                  <div className="truncate text-[10px] text-accent">{rep.hint ? `Clique para editar · ${HINTS[rep.hint].label.toLowerCase()}` : 'Clique para editar e corrigir'}</div>
+                )}
                 {rep?.info && !rep.error && <div className="num truncate text-[10px] text-muted">{rep.info}</div>}
                 {rep?.warnings.length ? <div className="truncate text-[10px] text-warning" title={rep.warnings.join('\n')}>⚠ {rep.warnings[0]}</div> : null}
                 <button

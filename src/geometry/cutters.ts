@@ -1,7 +1,7 @@
 import type { Manifold, Mat4 } from 'manifold-3d';
-import { CutError, dropSlivers, type CutResult } from './cut';
-import { cross, length, normalize, planeFrame, sub } from './math';
-import type { CutProfile, Plane, StrokeFrame, Vec2, Vec3 } from './types';
+import { CutError, cutTolerance, dropSlivers, selectIslands, type CutResult } from './cut';
+import { cross, dot, length, normalize, planeFrame, sub } from './math';
+import type { CutProfile, Plane, SphereBounds, StrokeFrame, Vec2, Vec3 } from './types';
 import type { Wasm } from './wasm';
 
 /**
@@ -16,9 +16,25 @@ export function cutByCutter(wasm: Wasm, part: Manifold, cutter: Manifold): CutRe
   if (a.isEmpty() || b.isEmpty() || a.volume() < minVolume || b.volume() < minVolume) {
     a.delete();
     b.delete();
-    throw new CutError('A superfície de corte não atravessa a peça.');
+    throw new CutError('A superfície de corte não atravessa a peça.', 'move-plane');
   }
   return { a, b };
+}
+
+/**
+ * Profiled cut limited to the islands whose (profiled) cut face lies mostly inside the sphere:
+ * the profile is cut everywhere, then the islands outside the limit are re-joined to A.
+ */
+export function boundedProfileCut(wasm: Wasm, part: Manifold, plane: Plane, profile: CutProfile, bounded: SphereBounds | undefined, keep?: Vec3[]): CutResult {
+  const cutter = profileCutter(wasm, plane, profile, cutterReach(part));
+  const res = cutByCutter(wasm, part, cutter);
+  cutter.delete();
+  if (!bounded && !keep?.length) return res;
+  const n = normalize(plane.normal);
+  const offset = dot(n, plane.origin);
+  // Vertices of the profiled face sit within half the amplitude of the mid plane.
+  const band = profile.amplitude / 2 + cutTolerance(part, offset);
+  return selectIslands(wasm, part, res.b, res.a, { bounded, keep, touches: (p) => Math.abs(dot(n, p) - offset) <= band });
 }
 
 /** Half-extent of a cutter that safely covers the whole part. */
@@ -90,10 +106,37 @@ export function smoothStroke(points: Vec2[], iterations = 2, minStep = 0.5): Vec
 /**
  * Region to the left of a stroke (as drawn), extruded along the view direction.
  * The stroke is extended at both ends so it always crosses the whole part.
+ * With `frame.eye` (perspective camera) the region is swept along the camera rays instead,
+ * so the cut lands exactly under the drawn line everywhere on screen.
  */
 export function strokeCutter(wasm: Wasm, frame: StrokeFrame, stroke: Vec2[], reach: number): Manifold {
   if (stroke.length < 2) throw new CutError('Desenhe um traço que atravesse a peça.');
+  const n = normalize(frame.n);
+  const u = normalize(frame.u);
+  const v = cross(n, u);
+  const o: Vec3 = frame.origin;
+  const eye = frame.eye;
+  const depth = eye ? dot(sub(eye, o), n) : 0;
+  if (eye && depth > 1e-3) return perspectiveCutter(wasm, frame, stroke, reach, { u, v, n, depth });
+
+  const poly = leftRegion(stroke, reach);
+  // Orientation-agnostic: NonZero fill keeps the enclosed side regardless of winding.
+  const cs = new wasm.CrossSection([poly], 'NonZero');
+  if (cs.isEmpty()) {
+    cs.delete();
+    throw new CutError('Traço inválido para corte.');
+  }
   const L = reach;
+  const slab = cs.extrude(2 * L, 0, 0, [1, 1], true);
+  cs.delete();
+  const m: Mat4 = [u[0], u[1], u[2], 0, v[0], v[1], v[2], 0, n[0], n[1], n[2], 0, o[0], o[1], o[2], 1];
+  const out = slab.transform(m);
+  slab.delete();
+  return out;
+}
+
+/** Polygon covering the left side of a stroke, extended by `L` past both ends. */
+function leftRegion(stroke: Vec2[], L: number): Vec2[] {
   const dir = (a: Vec2, b: Vec2): Vec2 => {
     const d = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
     return [(b[0] - a[0]) / d, (b[1] - a[1]) / d];
@@ -106,27 +149,45 @@ export function strokeCutter(wasm: Wasm, frame: StrokeFrame, stroke: Vec2[], rea
   const left = (d: Vec2): Vec2 => [-d[1], d[0]];
   const lEnd = left(d1);
   const lStart = left([-d0[0], -d0[1]]);
-  const poly: Vec2[] = [
+  return [
     start,
     ...stroke,
     end,
     [end[0] + lEnd[0] * L * 2, end[1] + lEnd[1] * L * 2],
     [start[0] + lStart[0] * L * 2, start[1] + lStart[1] * L * 2],
   ];
-  // Orientation-agnostic: NonZero fill keeps the enclosed side regardless of winding.
+}
+
+/**
+ * Perspective sweep: every point of the stroke (drawn on the plane through `origin`) is
+ * moved along its camera ray. A point at height h above the plane (towards the eye) sits at
+ * λ = 1 − h / depth of the way from the eye's foot point, so the cross-section scales linearly
+ * with h — exactly what `extrude(…, scaleTop)` builds.
+ */
+function perspectiveCutter(wasm: Wasm, frame: StrokeFrame, stroke: Vec2[], reach: number, f: { u: Vec3; v: Vec3; n: Vec3; depth: number }): Manifold {
+  const { u, v, n, depth } = f;
+  const rel = sub(frame.eye!, frame.origin);
+  const e: Vec2 = [dot(rel, u), dot(rel, v)];
+  // From just in front of the eye (or `reach` above the plane) down to `reach` behind it.
+  const zTop = Math.min(reach, depth * 0.98);
+  const zBottom = -reach;
+  const lTop = 1 - zTop / depth, lBottom = 1 - zBottom / depth;
+  // The 2D region must still cover the part where it is smallest (near the eye).
+  const poly = leftRegion(stroke, (reach * 2) / lTop).map(([x, y]): Vec2 => [(x - e[0]) * lBottom, (y - e[1]) * lBottom]);
   const cs = new wasm.CrossSection([poly], 'NonZero');
   if (cs.isEmpty()) {
     cs.delete();
     throw new CutError('Traço inválido para corte.');
   }
-  const slab = cs.extrude(2 * L, 0, 0, [1, 1], true);
+  // Extrude from the far end (z = zBottom, scale 1) towards the eye (scale lTop / lBottom).
+  const s = lTop / lBottom;
+  const cone = cs.extrude(zTop - zBottom, 0, 0, [s, s]);
   cs.delete();
-  const n = normalize(frame.n);
-  const u = normalize(frame.u);
-  const v = cross(n, u);
-  const o: Vec3 = frame.origin;
-  const m: Mat4 = [u[0], u[1], u[2], 0, v[0], v[1], v[2], 0, n[0], n[1], n[2], 0, o[0], o[1], o[2], 1];
-  const out = slab.transform(m);
-  slab.delete();
+  // Local x, y in the (u, v) plane centred under the eye; local z runs along +n from zBottom.
+  const o = frame.origin;
+  const base: Vec3 = [0, 1, 2].map((k) => o[k] + u[k] * e[0] + v[k] * e[1] + n[k] * zBottom) as Vec3;
+  const m: Mat4 = [u[0], u[1], u[2], 0, v[0], v[1], v[2], 0, n[0], n[1], n[2], 0, base[0], base[1], base[2], 1];
+  const out = cone.transform(m);
+  cone.delete();
   return out;
 }

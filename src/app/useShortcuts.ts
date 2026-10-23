@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { cancelCut, commitCut, suggestFromBrush } from '../features/cut/cutActions';
+import { cancelCut, commitCut, cycleCandidate, suggestFromBrush } from '../features/cut/cutActions';
 import { useHistory } from '../store/history';
 import { setUI, useUI } from '../store/ui';
 import { runCommand } from './commands';
@@ -31,7 +31,14 @@ export function useShortcuts() {
       }
       if (e.altKey) return;
 
-      const { draft, tool, brush } = useUI.getState();
+      const { draft, tool, brush, xray } = useUI.getState();
+      if (xray) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          void import('../features/import/importActions').then((m) => m.applyXRay());
+        }
+        return;
+      }
       if (tool === 'brush') {
         if (e.key === 'Enter') {
           e.preventDefault();
@@ -47,7 +54,10 @@ export function useShortcuts() {
       if (draft) {
         if (e.key === 'Enter') {
           e.preventDefault();
-          commitCut();
+          void commitCut();
+        } else if (e.key === 'Tab' && draft.mode === 'region') {
+          e.preventDefault();
+          cycleCandidate(e.shiftKey ? -1 : 1);
         } else if (e.key === 'Escape') cancelCut();
         return;
       }

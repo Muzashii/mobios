@@ -7,6 +7,7 @@ import { HollowInspector } from '../features/analysis/PrintPrep';
 import { useHistory } from '../store/history';
 import { CutInspector } from '../features/cut/CutInspector';
 import { SmartCutInspector } from '../features/smartcut/SmartCutInspector';
+import { XRayPanel } from '../features/import/XRayPanel';
 import { useUI } from '../store/ui';
 
 export function Inspector() {
@@ -14,9 +15,10 @@ export function Inspector() {
   const connectorEdit = useUI((s) => s.connectorEdit);
   const part = useUI((s) => s.parts.find((p) => p.id === s.selection));
   const brushing = useUI((s) => s.tool === 'brush');
+  const xray = useUI((s) => (s.xray ? `${s.xray.index}` : null));
   const editKind = useHistory((s) => s.doc.operations.find((o) => o.id === connectorEdit)?.kind);
 
-  const key = brushing ? 'smartcut' : draft ? `cut-${draft.editingOpId ?? 'new'}` : connectorEdit ? `k-${connectorEdit}` : part ? `part-${part.id}` : 'project';
+  const key = xray !== null ? `xray-${xray}` : brushing ? 'smartcut' : draft ? `cut-${draft.editingOpId ?? 'new'}` : connectorEdit ? `k-${connectorEdit}` : part ? `part-${part.id}` : 'project';
   return (
     <aside id="inspector" tabIndex={-1} aria-label="Inspector" className="relative h-full overflow-hidden border-l border-line bg-surface">
       <AnimatePresence mode="wait" initial={false}>
@@ -28,7 +30,9 @@ export function Inspector() {
           exit={{ opacity: 0, x: -8 }}
           transition={{ duration: 0.14 }}
         >
-          {brushing ? (
+          {xray !== null ? (
+            <XRayPanel />
+          ) : brushing ? (
             <SmartCutInspector />
           ) : draft ? (
             <CutInspector draft={draft} />

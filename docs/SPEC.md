@@ -61,12 +61,14 @@ Legenda: **[MVP]** primeira versão utilizável · **[v1]** paridade + diferenci
 - [MVP] STL (binário/ASCII), OBJ, 3MF (incluindo multi-objeto).
 - [v1] PLY, GLB/GLTF; arrastar e soltar; abrir vários arquivos.
 - [MVP] **Reparo automático** na importação: fechar buracos, remover faces degeneradas, unir vértices, corrigir normais (avisar o usuário do que foi corrigido).
+- [v2] **Raio‑X da malha** (ADR 0009): diagnóstico completo na importação com heatmap no viewport e opções de reparo por problema; nada muda sem o usuário ver (“Reparar tudo (recomendado)” em 1 clique). Fallback por remesh volumétrico.
 - [v1] Detectar unidade (mm/pol) e escala suspeita.
 
 ### 3.2 Tipos de corte
 - [MVP] **Corte por plano** com gizmo (mover/rotacionar), snap a eixos, posição numérica.
 - [MVP] **Corte por plano limitado** (só separa a "ilha" que o plano atravessa dentro de um raio/caixa) — essencial para separar um braço sem cortar o tronco.
 - [v1] **Corte natural (SmartCut)**: o usuário clica/pincela numa região (ex.: braço) e o app sugere a melhor linha de separação seguindo **concavidades** (articulações, pescoço, cintura). Implementação: segmentação por *Shape Diameter Function* + concavidade, com o laço de corte ajustado como curva fechada mínima na superfície; a superfície de corte é gerada entre o laço e o interior.
+- [v2] **SmartCut v2** (ADR 0008): passar o mouse acende a parte, o clique corta; a emenda segue o contorno real (junta curva com centro plano para pino e numeração), modo casca (cabelo/capacete), 3 sugestões (Tab), sementes negativas (Shift), várias regiões em lote. Validação ao vivo antes de cortar.
 - [v1] **Corte por curva/superfície livre**: o usuário desenha um traço na tela; o traço é extrudado em profundidade formando uma superfície curva (spline) de corte.
 - [v1] **Corte em degrau / zigue-zague / ondulado** (perfil não plano) para esconder a junta e travar rotação.
 - [v1] **Seleção por pincel** (tinta sobre a malha) para definir "esta região vira uma parte".

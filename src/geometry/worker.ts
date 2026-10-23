@@ -2,7 +2,7 @@
 import * as Comlink from 'comlink';
 import wasmUrl from 'manifold-3d/manifold.wasm?url';
 import { GeometryService } from './service';
-import type { Vec3, EvalResult, ExportFormat, ExportPart, ImportedMesh, MeshData, Operation, SourceRef, Technology } from './types';
+import type { CutOperation, InspectionReport, RepairPlan, Vec3, EvalResult, ExportFormat, ExportPart, ImportedMesh, MeshData, Operation, SourceRef, Technology } from './types';
 import { loadManifold } from './wasm';
 
 const service = loadManifold(wasmUrl).then((wasm) => new GeometryService(wasm));
@@ -35,6 +35,31 @@ const api = {
   },
   async smartCut(partId: string, seeds: Vec3[], seedRadius: number, beforeOp?: string) {
     return (await service).smartCut(partId, seeds, seedRadius, beforeOp);
+  },
+  async smartCutClusters(partId: string, seeds: Vec3[], seedRadius: number, negSeeds?: Vec3[], beforeOp?: string) {
+    const res = (await service).smartCutClusters(partId, seeds, seedRadius, negSeeds, beforeOp);
+    const buffers = res.flatMap((r) => ('suggestion' in r ? r.suggestion.candidates.map((c) => c.preview.buffer as ArrayBuffer) : []));
+    return Comlink.transfer(res, buffers);
+  },
+  async smartHover(partId: string, point: Vec3, seedRadius: number) {
+    const h = (await service).smartHover(partId, point, seedRadius);
+    return h ? Comlink.transfer(h, [h.preview.buffer as ArrayBuffer]) : null;
+  },
+  async checkCut(op: CutOperation, beforeOp?: string) {
+    const c = (await service).checkCut(op, beforeOp);
+    return Comlink.transfer(c, c.previewB ? ([c.previewB.positions.buffer, c.previewB.normals.buffer] as ArrayBuffer[]) : []);
+  },
+  async inspectFile(fileName: string, buffer: ArrayBuffer, idPrefix: string, tech: Technology, buildVolume?: Vec3): Promise<InspectionReport[]> {
+    const reports = (await service).inspectFile(fileName, buffer, idPrefix, tech, buildVolume);
+    const buffers = reports.flatMap((r) => [r.preview.positions.buffer, r.preview.normals.buffer, ...r.issues.flatMap((i) => (i.markers ? [i.markers.positions.buffer] : []))]) as ArrayBuffer[];
+    return Comlink.transfer(reports, buffers);
+  },
+  async finishImport(id: string, plan: RepairPlan) {
+    const out = (await service).finishImport(id, plan);
+    return Comlink.transfer(out, out.meshes.flatMap((m) => meshBuffers(m.mesh)));
+  },
+  async discardImport(id: string) {
+    (await service).discardImport(id);
   },
   async analyze(partId: string, tech: Technology) {
     return (await service).analyze(partId, tech);

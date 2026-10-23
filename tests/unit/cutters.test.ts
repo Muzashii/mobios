@@ -72,7 +72,9 @@ describe('free-hand stroke cut', () => {
       { kind: 'cut-surface', id: 'c1', target: 's', frame, points },
       { kind: 'connector', id: 'k1', joint: 'c1', type: 'pin', params: { diameter: 5, depth: 6, clearance: 0.2, chamfer: 0.5, minWall: 1.6, count: 'auto', maleSide: 'a' } },
     ]);
-    expect(k.reports.k1.error).toMatch(/plano/);
+    // A connector that does not fit never fails the cut: it becomes a warning (C6).
+    expect(k.reports.k1.error).toBeUndefined();
+    expect(k.reports.k1.warnings.join(' ')).toMatch(/plana/);
     engine.dispose();
   });
 });

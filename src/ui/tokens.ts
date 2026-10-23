@@ -53,3 +53,17 @@ export function autoPartColor(index: number): string {
 
 export const CUT_A = '#7FB3D5';
 export const CUT_B = ACCENT;
+/** SmartCut negative seeds (Shift + brush: "keep this with the body"). */
+export const NEG_SEED = '#3A86FF';
+
+/** Raio-X heatmap colours per issue kind. */
+export const XRAY_COLORS: Record<string, string> = {
+  holes: '#ff4d4f',
+  'non-manifold': '#ff3fd2',
+  orientation: '#9b5cff',
+  'self-intersections': '#ff8c1a',
+  shells: '#22c3c3',
+  'inner-shells': '#7fb3d5',
+  'thin-walls': '#ffd43b',
+  needles: '#a3a3a3',
+};

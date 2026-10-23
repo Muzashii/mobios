@@ -6,9 +6,11 @@ import { hollowPart } from './hollow';
 import { CutError, cutByPlane, faceSection } from './cut';
 import { toDisplayMesh } from './display';
 import { planeFrame } from './math';
+import { cutRegion } from './regionCut';
 import { manifoldToMeshData } from './repair';
-import { cutByCutter, cutterReach, profileCutter, strokeCutter } from './cutters';
-import type { CutOperation, EvalResult, JointInfo, Operation, OpReport, PartId, PartResult, PartStats, Plane, SourceRef, Vec3 } from './types';
+import { regionContext } from './smartcut';
+import { boundedProfileCut, cutByCutter, cutterReach, strokeCutter } from './cutters';
+import type { CutCheck, CutOperation, EvalResult, JointInfo, Operation, OpReport, PartId, PartResult, PartStats, Plane, SourceRef, Vec3 } from './types';
 import type { Wasm } from './wasm';
 
 interface PartState {
@@ -131,13 +133,53 @@ export class Engine {
       const state = op.kind === 'connector' ? this.applyConnector(prev, op) : op.kind === 'label' ? this.applyLabel(prev, op) : op.kind === 'hollow' ? this.applyHollow(prev, op) : this.applyCut(prev, op);
       return { key, opId: op.id, state: state.state, report: { warnings: state.warnings, info: state.info } };
     } catch (e) {
-      const message = e instanceof CutError || e instanceof Error ? e.message : String(e);
-      return { key, opId: op.id, state: prev, report: { error: message, warnings: [] } };
+      const message = e instanceof Error ? e.message : String(e);
+      const hint = e instanceof CutError ? e.hint : undefined;
+      return { key, opId: op.id, state: prev, report: { error: message, ...(hint ? { hint } : {}), warnings: [] } };
+    }
+  }
+
+  /**
+   * Dry-run of a cut (pre-validation while the user edits the draft): runs the real geometry
+   * on the target as it is right before `beforeOp` (or now), reports and frees everything.
+   */
+  checkCut(op: CutOperation, beforeOp?: string): CutCheck {
+    const state = beforeOp ? this.stateBefore(beforeOp) : this.finalState();
+    const target = state?.parts.get(op.target);
+    const empty = { piecesA: 0, piecesB: 0, volumeA: 0, volumeB: 0, warnings: [] as string[] };
+    if (!target) return { ok: false, error: 'A parte alvo deste corte não existe mais.', ...empty };
+    try {
+      const g = this.cutGeometry(target.m, op);
+      const count = (m: Manifold) => {
+        const parts = m.decompose();
+        const n = parts.filter((x) => Math.abs(x.volume()) > Math.abs(m.volume()) * 1e-6).length;
+        parts.forEach((x) => x.delete());
+        return n;
+      };
+      const res: CutCheck = {
+        ok: true,
+        piecesA: count(g.a),
+        piecesB: count(g.b),
+        volumeA: g.a.volume(),
+        volumeB: g.b.volume(),
+        warnings: g.warnings,
+        previewB: op.kind === 'cut-region' ? toDisplayMesh(manifoldToMeshData(g.b)) : undefined,
+      };
+      g.a.delete();
+      g.b.delete();
+      return res;
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e), hint: e instanceof CutError ? e.hint : undefined, ...empty };
     }
   }
 
   /** Runs any cut operation; returns the two halves and the joint geometry. */
-  private cutGeometry(target: Manifold, op: CutOperation) {
+  private cutGeometry(target: Manifold, op: CutOperation): { a: Manifold; b: Manifold; planar: boolean; plane: Plane; insertDir: Vec3; faceRadius?: number; warnings: string[] } {
+    if (op.kind === 'cut-region') {
+      const ctx = regionContext(target, 'apply');
+      const r = cutRegion(this.wasm, target, ctx, op);
+      return { a: r.a, b: r.b, planar: r.planar, plane: r.plane, insertDir: r.plane.normal, faceRadius: r.faceRadius, warnings: r.warnings };
+    }
     if (op.kind === 'cut-surface') {
       const cutter = strokeCutter(this.wasm, op.frame, op.points, cutterReach(target));
       const res = cutByCutter(this.wasm, target, cutter);
@@ -150,24 +192,22 @@ export class Engine {
       const lx = -(p1[1] - p0[1]) / len, ly = (p1[0] - p0[0]) / len;
       const sign = op.flip ? -1 : 1;
       const dir = [0, 1, 2].map((k) => sign * (op.frame.u[k] * lx + op.frame.v[k] * ly)) as Vec3;
-      return { a, b, planar: false, plane: { origin: op.frame.origin, normal: dir } as Plane, insertDir: dir };
+      return { a, b, planar: false, plane: { origin: op.frame.origin, normal: dir } as Plane, insertDir: dir, warnings: [] };
     }
     if (op.profile && op.profile.amplitude > 0) {
-      if (op.bounded) throw new CutError('Corte limitado ainda não combina com perfil (degrau/zigue-zague/onda).');
-      const cutter = profileCutter(this.wasm, op.plane, op.profile, cutterReach(target));
-      const res = cutByCutter(this.wasm, target, cutter);
-      cutter.delete();
-      return { ...res, planar: false, plane: op.plane, insertDir: op.plane.normal };
+      const res = boundedProfileCut(this.wasm, target, op.plane, op.profile, op.bounded);
+      return { ...res, planar: false, plane: op.plane, insertDir: op.plane.normal, warnings: [] };
     }
-    return { ...cutByPlane(this.wasm, target, op.plane, op.bounded), planar: true, plane: op.plane, insertDir: op.plane.normal };
+    return { ...cutByPlane(this.wasm, target, op.plane, op.bounded), planar: true, plane: op.plane, insertDir: op.plane.normal, warnings: [] };
   }
 
   private applyCut(prev: State, op: CutOperation) {
     const target = prev.parts.get(op.target);
     if (!target) throw new Error('A parte alvo deste corte não existe mais.');
-    const { a, b, planar, plane, insertDir } = this.cutGeometry(target.m, op);
+    const { a, b, planar, plane, insertDir, faceRadius, warnings } = this.cutGeometry(target.m, op);
     const ids = cutPartIds(op.id);
     const fromSource = this.sources.has(op.target);
+    const nameB = op.kind === 'cut-region' && op.name ? op.name : childName(target.name, 'b', fromSource);
     const parts = new Map<PartId, PartState>();
     for (const [id, p] of prev.parts) {
       if (id !== op.target) {
@@ -175,10 +215,10 @@ export class Engine {
         continue;
       }
       parts.set(ids.a, { m: a, name: childName(target.name, 'a', fromSource), version: this.versionSeq++, producedBy: op.id, lineage: [...target.lineage, ids.a] });
-      parts.set(ids.b, { m: b, name: childName(target.name, 'b', fromSource), version: this.versionSeq++, producedBy: op.id, lineage: [...target.lineage, ids.b] });
+      parts.set(ids.b, { m: b, name: nameB, version: this.versionSeq++, producedBy: op.id, lineage: [...target.lineage, ids.b] });
     }
     let faceArea: number;
-    if (planar) {
+    if (planar && !faceRadius) {
       const section = faceSection(b, planeFrame(plane).toLocal);
       faceArea = section.area();
       section.delete();
@@ -189,8 +229,9 @@ export class Engine {
     const cutCount = [...prev.joints.values()].length + 1;
     const joints = new Map(prev.joints);
     const label = `J${cutCount}`;
-    joints.set(op.id, { id: op.id, a: ids.a, b: ids.b, plane, bounded: op.kind === 'cut-plane' ? op.bounded : undefined, faceArea, label, planar, insertDir, obstacles: [] });
-    return { state: { parts, joints }, warnings: [] as string[], info: `${faceArea.toFixed(0)} mm² de face` };
+    joints.set(op.id, { id: op.id, a: ids.a, b: ids.b, plane, bounded: op.kind === 'cut-plane' ? op.bounded : undefined, faceArea, label, planar, ...(faceRadius ? { faceRadius } : {}), insertDir, obstacles: [] });
+    const shape = op.kind === 'cut-region' ? (op.mode === 'shell' ? ' · casca' : faceRadius ? ' · junta curva' : ' · plano') : '';
+    return { state: { parts, joints }, warnings, info: `${faceArea.toFixed(0)} mm² de face${shape}` };
   }
 
   private applyConnector(prev: State, op: Extract<Operation, { kind: 'connector' }>) {
@@ -198,13 +239,15 @@ export class Engine {
     if (!joint) throw new Error('O corte deste encaixe não existe mais.');
     const a = prev.parts.get(joint.a), b = prev.parts.get(joint.b);
     if (!a || !b) throw new Error('As partes deste encaixe foram cortadas depois; mova o encaixe para logo após o corte.');
-    if (!joint.planar) throw new Error('Encaixes precisam de um corte plano sem perfil — o perfil/curva já trava a montagem.');
+    // A connector that cannot be placed never undoes the cut: it becomes a warning.
+    const skip = (why: string) => ({ state: prev, warnings: [why], info: 'encaixe não aplicado' });
+    if (!joint.planar) return skip('Esta junta não tem área plana para pinos — o perfil/curva/casca já trava a montagem.');
     const res = applyConnector(this.wasm, a.m, b.m, joint, op.type, op.params);
     if (res.placed === 0) {
       res.a.delete();
       res.b.delete();
       res.pins?.delete();
-      throw new Error(res.warnings[0] ?? 'Nenhum pino coube nesta face.');
+      return skip(`${res.warnings[0] ?? 'Nenhum pino coube nesta face.'} Reduza o diâmetro do encaixe.`);
     }
     const parts = new Map<PartId, PartState>();
     for (const [id, p] of prev.parts) {
@@ -241,10 +284,15 @@ export class Engine {
   private applyLabel(prev: State, op: Extract<Operation, { kind: 'label' }>) {
     const joint = prev.joints.get(op.joint);
     if (!joint) throw new Error('O corte desta numeração não existe mais.');
-    if (!joint.planar) throw new Error('A numeração precisa de uma face plana.');
+    if (!joint.planar) return { state: prev, warnings: ['A numeração precisa de uma área plana na junta; não foi gravada.'], info: 'numeração não aplicada' };
     const a = prev.parts.get(joint.a), b = prev.parts.get(joint.b);
     if (!a || !b) throw new Error('As partes desta junta foram cortadas depois; mova a numeração para logo após o corte.');
-    const res = engraveLabel(this.wasm, a.m, b.m, joint, joint.label, op.size, op.depth);
+    let res: ReturnType<typeof engraveLabel>;
+    try {
+      res = engraveLabel(this.wasm, a.m, b.m, joint, joint.label, op.size, op.depth);
+    } catch (e) {
+      return { state: prev, warnings: [e instanceof Error ? e.message : String(e)], info: 'numeração não aplicada' };
+    }
     const parts = new Map<PartId, PartState>();
     for (const [id, p] of prev.parts) {
       if (id === joint.a) parts.set(id, { ...p, m: res.a, version: this.versionSeq++, stats: undefined });

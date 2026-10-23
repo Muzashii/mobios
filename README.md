@@ -34,7 +34,8 @@ Imprimir uma peça grande em partes costuma terminar em três frustrações: **o
 
 O Mobios resolve as três:
 
-- **Corta onde faz sentido** — o SmartCut acha a articulação (ombro, pescoço, cintura) a partir de uma pincelada; o corte limitado separa um braço sem tocar no tronco.
+- **Corta onde faz sentido** — passe o mouse e a parte acende; clique e o SmartCut separa a cabeça, o braço ou a mão seguindo o contorno real da articulação (junta curva, com pino). O corte limitado separa um braço sem tocar no tronco.
+- **Raio‑X na importação** — furos, normais invertidas, autointerseções, cascas soltas e paredes finas aparecem pintados no modelo, com a opção de reparo de cada um.
 - **Encaixa de primeira** — sete tipos de encaixe com folga calibrada por tecnologia (FDM ou resina), posicionados automaticamente e **verificados contra colisão** antes de você imprimir.
 - **Monta sem dúvida** — cada junta recebe um código gravado nas duas faces (J1 ↔ J1), e o app gera um guia de montagem ilustrado, passo a passo.
 
@@ -121,7 +122,7 @@ flowchart LR
 
 - **Geometria fora da tela** — todo corte, encaixe e reparo roda num Web Worker com o [manifold-3d](https://github.com/elalish/manifold), que garante malhas sempre fechadas (manifold). A interface nunca trava.
 - **Histórico reexecutável** — o projeto é uma lista de operações com IDs determinísticos. Editar o corte nº 1 recalcula só dali em diante, reaproveitando o resto.
-- **SmartCut** — distância geodésica a partir da região pincelada, anéis pontuados por perímetro e concavidade, e a *Shape Diameter Function* para entender a espessura do membro sob o pincel. Detalhes no [ADR 0004](docs/ADR/0004-smartcut-e-cortes-livres.md).
+- **SmartCut v2** — região‑semente pela *Shape Diameter Function* (com BVH), anéis geodésicos pontuados por perímetro e concavidade, laço ajustado por *min-cut* nas dobras e corte pela própria região (tampa curva), sem achatar num plano. Acerto medido num corpus: 41% → 91% na 1ª sugestão (95% entre as 3 primeiras) ([linha de base](docs/baseline-smartcut.md), [ADR 0008](docs/ADR/0008-smartcut-v2-corte-por-regiao.md)). Raio‑X: [ADR 0009](docs/ADR/0009-raio-x-e-reparo-nao-destrutivo.md).
 - **Leve para abrir** — o motor 3D e o WASM só carregam quando há um modelo. A primeira tela carrega 180 KB de JavaScript (gzip).
 
 Todas as decisões de arquitetura estão registradas em [`docs/ADR`](docs/ADR), e a especificação completa em [`docs/SPEC.md`](docs/SPEC.md).

@@ -58,7 +58,7 @@ export function weldVertices(positions: Float32Array, indices?: Uint32Array, tol
 const edgeKey = (a: number, b: number) => (a < b ? a * 0x100000000 + b : b * 0x100000000 + a);
 
 /** Removes degenerate and duplicate triangles. */
-function cleanTriangles(mesh: MeshData, report: string[]): Uint32Array {
+export function cleanTriangles(mesh: MeshData, report: string[]): Uint32Array {
   const { positions: p, indices } = mesh;
   const keep: number[] = [];
   const seen = new Set<string>();
@@ -81,7 +81,7 @@ function cleanTriangles(mesh: MeshData, report: string[]): Uint32Array {
 }
 
 /** Makes triangle winding consistent across shared edges (BFS per component). */
-function orientConsistently(tris: Uint32Array, report: string[]) {
+export function orientConsistently(tris: Uint32Array, report: string[]) {
   const n = tris.length / 3;
   const edgeFaces = new Map<number, number[]>();
   for (let f = 0; f < n; f++) {
@@ -146,11 +146,13 @@ function fillHoles(positions: Float32Array, tris: Uint32Array, report: string[])
   const extraTris: number[] = [];
   let vertCount = positions.length / 3;
   let holes = 0;
+  // The guard must use the initial size: `next` shrinks while the loop is walked.
+  const guard = next.size + 1;
   while (next.size) {
     const start = next.keys().next().value as number;
     const loop: number[] = [];
     let cur = start;
-    while (next.has(cur) && loop.length <= next.size + 1) {
+    while (next.has(cur) && loop.length <= guard) {
       loop.push(cur);
       const nx = next.get(cur)!;
       next.delete(cur);
@@ -179,7 +181,7 @@ function fillHoles(positions: Float32Array, tris: Uint32Array, report: string[])
   return { positions: p, indices: t };
 }
 
-function signedVolume(p: Float32Array, t: Uint32Array) {
+export function signedVolume(p: Float32Array, t: Uint32Array) {
   let v = 0;
   for (let i = 0; i < t.length; i += 3) {
     const a = t[i] * 3, b = t[i + 1] * 3, c = t[i + 2] * 3;
@@ -190,7 +192,7 @@ function signedVolume(p: Float32Array, t: Uint32Array) {
   return v / 6;
 }
 
-function tryManifold(wasm: Wasm, mesh: MeshData): Manifold | null {
+export function tryManifold(wasm: Wasm, mesh: MeshData): Manifold | null {
   const m = new wasm.Mesh({ numProp: 3, vertProperties: mesh.positions, triVerts: mesh.indices });
   m.merge();
   try {

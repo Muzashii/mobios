@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { cutByPlane } from '../../src/geometry/cut';
+import { Engine } from '../../src/geometry/engine';
 import { manifoldToMeshData } from '../../src/geometry/repair';
 import { smallestEigenvector, suggestSmartCut } from '../../src/geometry/smartcut';
 import { loadManifold, type Wasm } from '../../src/geometry/wasm';
@@ -31,14 +31,23 @@ describe('SmartCut — 5 figuras de teste (critério da Fase 5)', () => {
       expect(off, `origem ${o.map((v) => v.toFixed(1))} longe da articulação`).toBeLessThan(fig.tolerance);
       expect(align).toBeGreaterThan(0.8);
 
-      // The suggestion must be directly usable: a bounded cut that keeps the seed in B.
-      const { a, b } = cutByPlane(wasm, solid, s.plane, { center: s.plane.origin, radius: s.radius });
+      // The suggestion must be directly usable: the region cut keeps the seed in B, and B is
+      // the limb (not a slab of the body, which a plane through a curved ring would take).
+      const engine = new Engine(wasm);
+      engine.addSource('s', solid);
+      const c = s.candidates[0];
+      const r = engine.evaluate([{ id: 's', name: 'Peça' }], [{ kind: 'cut-region', id: 'c1', target: 's', balls: s.balls, seeds: fig.seeds, level: c.level, mode: 'auto', plane: c.plane }]);
+      expect(r.reports.c1.error, r.reports.c1.error).toBeUndefined();
+      const b = r.parts.find((p) => p.id === 'c1.b')!;
+      const a = r.parts.find((p) => p.id === 'c1.a')!;
       const seed = fig.seeds[fig.seeds.length - 1];
-      const bb = b.boundingBox();
+      const bb = b.stats.bounds;
       const inside = [0, 1, 2].every((k) => seed[k] >= bb.min[k] - fig.seedRadius && seed[k] <= bb.max[k] + fig.seedRadius);
       expect(inside).toBe(true);
-      expect(b.volume()).toBeGreaterThan(0);
-      [solid, a, b].forEach((m) => m.delete());
+      expect(b.stats.volume).toBeGreaterThan(0);
+      expect(b.stats.volume).toBeLessThan((a.stats.volume + b.stats.volume) * 0.85);
+      expect(b.stats.components).toBe(1);
+      engine.dispose();
     });
   }
 
