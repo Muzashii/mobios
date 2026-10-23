@@ -126,7 +126,11 @@ export function guessName(ctx: RegionContext, labels: Uint8Array): string {
   const c = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2];
   const lateral = Math.hypot(bc[0] - c[0], bc[1] - c[1]) / W;
   const width = Math.max(bhi[0] - blo[0], bhi[1] - blo[1]) / W;
+  let areaB = 0;
+  for (let f = 0; f < nf; f++) if (labels[f]) areaB += ctx.topo.fArea[f];
+  const share = areaB / ctx.topo.totalArea;
   if (bottom > 0.68 && top > 0.95 && width < 0.7) return 'Cabeça';
+  if (share < 0.035 && lateral > 0.3 && bottom > 0.25) return 'Mão';
   if (top < 0.14) return 'Pé';
   if (top < 0.5 && lateral > 0.05) return 'Perna';
   if (bottom > 0.3 && lateral > 0.22) return 'Braço';

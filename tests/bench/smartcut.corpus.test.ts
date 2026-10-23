@@ -19,8 +19,10 @@ import { CORPUS, type CorpusCase, type Expect } from '../corpus/synthetic';
  * docs/baseline-smartcut.md. Real models in tests/corpus/models/ (STL + .expect.json) are
  * included automatically.
  */
-function passes(b: Bounds, share: number, e: Expect) {
+function passes(b: Bounds, share: number, e: Expect, seam?: Vec3) {
   for (let k = 0; k < 3; k++) {
+    const r = e.seam?.[k];
+    if (r && (!seam || seam[k] < r[0] || seam[k] > r[1])) return false;
     if (e.bMin?.[k] != null && b.min[k] < e.bMin[k]!) return false;
     if (e.bMax?.[k] != null && b.max[k] > e.bMax[k]!) return false;
   }
@@ -80,7 +82,8 @@ it('SmartCut corpus: v2 vs v1 baseline', async () => {
         const r = engine.evaluate([{ id: 's', name: 'x' }], [{ kind: 'cut-region', id: `c${i}`, target: 's', balls: s.balls, seeds, negSeeds: neg, level: cand.level, mode: 'auto', plane: cand.plane }]);
         if (i === 0) msCut = performance.now() - t1;
         const b = r.parts.find((p) => p.id === `c${i}.b`);
-        const ok = !!b && !r.reports[`c${i}`].error && passes(b.stats.bounds, b.stats.volume / total, c.expect);
+        const joint = r.joints.find((j) => j.id === `c${i}`);
+        const ok = !!b && !r.reports[`c${i}`].error && passes(b.stats.bounds, b.stats.volume / total, c.expect, joint?.plane.origin);
         if (i === 0) {
           top1 = ok;
           if (!ok) note = r.reports[`c${i}`].error ?? (b ? `B: z ${b.stats.bounds.min[2].toFixed(0)}–${b.stats.bounds.max[2].toFixed(0)}, ${((b.stats.volume / total) * 100).toFixed(1)}%` : 'sem B');
@@ -102,7 +105,7 @@ it('SmartCut corpus: v2 vs v1 baseline', async () => {
       dense?.delete();
       const { a, b } = cutByPlaneV1(wasm, solid, s1.plane, { center: s1.plane.origin, radius: s1.radius });
       const bb = b.boundingBox();
-      v1 = passes({ min: [...bb.min], max: [...bb.max] }, b.volume() / total, c.expect);
+      v1 = passes({ min: [...bb.min], max: [...bb.max] }, b.volume() / total, c.expect, s1.plane.origin);
       a.delete();
       b.delete();
     } catch {

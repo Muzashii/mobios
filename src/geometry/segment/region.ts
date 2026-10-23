@@ -26,7 +26,15 @@ export interface RegionContext {
   /** Per-vertex concavity in [0, ∞) (neighbours above the tangent plane). */
   concavity: Float32Array;
   grid: VertexGrid;
+  /** Vertices on feature lines (sharp fold: seams, hems, hairline steps, junctions). */
+  creases: Uint8Array;
+  creaseCount: number;
 }
+
+/** Fold (radians) above which an edge counts as a feature line. */
+const CREASE = 0.6;
+/** Extra geodesic cost for walking along/over a feature edge: rings stick to seams. */
+const CREASE_COST = 3;
 
 export function makeContext(mesh: MeshData): RegionContext {
   const topo = buildTopology(mesh);
@@ -53,6 +61,7 @@ export function makeContext(mesh: MeshData): RegionContext {
     }
     concavity[v] = n ? Math.max(0, s / n) : 0;
   }
+  const creases = featureVertices(topo);
   return {
     mesh,
     topo,
@@ -61,7 +70,19 @@ export function makeContext(mesh: MeshData): RegionContext {
     edge: edgeCount ? edgeSum / edgeCount : diag / 100,
     concavity,
     grid: new VertexGrid(p, [minX, minY, minZ], [maxX, maxY, maxZ]),
+    creases,
+    creaseCount: creases.reduce((a, b) => a + b, 0),
   };
+}
+
+function featureVertices(topo: Topology): Uint8Array {
+  const out = new Uint8Array(topo.nv);
+  for (let f = 0; f < topo.nf; f++) for (let k = 0; k < 3; k++) {
+    if (Math.abs(edgeFold(topo, f, k)) < CREASE) continue;
+    out[topo.t[f * 3 + k]] = 1;
+    out[topo.t[f * 3 + (k + 1) % 3]] = 1;
+  }
+  return out;
 }
 
 /** Uniform hash grid over the vertices (ball membership without O(vertices × seeds)). */
@@ -232,6 +253,8 @@ export function regionVertices(ctx: RegionContext, balls: RegionBall[]): Uint8Ar
     const vn = topo.vNormal;
     while (stack.length) {
       const v = stack.pop()!;
+      // Feature lines (hem, hairline, a junction) bound the region: it grows up to them, not past.
+      if (v !== startV && ctx.creases[v]) continue;
       for (let k = vStart[v]; k < vStart[v + 1]; k++) {
         const w = vNbr[k];
         if (stamp[w] === bi) continue;
@@ -275,7 +298,9 @@ export function regionField(ctx: RegionContext, balls: RegionBall[], seeds: Vec3
     c[0] += p[v * 3]; c[1] += p[v * 3 + 1]; c[2] += p[v * 3 + 2];
   }
   if (!src.length) throw new Error('Pincele ou clique na região que quer separar.');
-  const d = geodesic(ctx.topo, src);
+  // Crossing a feature line costs extra: iso-rings pile up on hems and hairlines.
+  const cv = ctx.creases, k = CREASE_COST;
+  const d = ctx.creaseCount && k > 0 ? geodesic(ctx.topo, src, (a, b, len) => (cv[a] || cv[b] ? len * (1 + k) : len)) : geodesic(ctx.topo, src);
   let maxD = 0;
   for (let v = 0; v < d.length; v++) if (Number.isFinite(d[v]) && d[v] > maxD) maxD = d[v];
   const nearest = (s: Vec3) => ctx.grid.nearest(s);
@@ -393,6 +418,13 @@ export function scanLevels(ctx: RegionContext, field: Field, maxCandidates = 3):
   // Distinct local minima, best first.
   const minima = scored.filter((r, i) => (i === 0 || r.score <= scored[i - 1].score) && (i === scored.length - 1 || r.score <= scored[i + 1].score));
   minima.sort((a, b) => a.score - b.score);
+  // Near-ties go to the ring closest to the click: whoever clicks the hand wants the hand,
+  // not the whole arm behind a slightly sharper shoulder crease.
+  if (minima.length > 1) {
+    const near = minima.filter((m) => m.score <= minima[0].score + 0.15).sort((a, b) => a.t - b.t)[0];
+    minima.splice(minima.indexOf(near), 1);
+    minima.unshift(near);
+  }
   const out: LevelScore[] = [];
   const gap = maxD / levels * 3;
   for (const m of minima) {

@@ -10,8 +10,9 @@ Guarda as **entradas**, não a curva: bolas da região‑semente, sementes posit
 ### Pipeline (`src/geometry/segment/region.ts`)
 1. **Contexto por peça**: topologia CSR, BVH (`three-mesh-bvh` no worker, modo `indirect` para manter a ordem dos triângulos), grade de vértices e concavidade por vértice; cache LRU por `Manifold`. Para sugestões, peças com > 300 mil triângulos usam um *proxy* simplificado (`Manifold.simplify`); malhas CAD com triângulos longos são refinadas. Raycast força bruta eliminado do SmartCut.
 2. **Região‑semente**: cada pincelada vira a bola inscrita (SDF: eixo + 8 raios a 25°, mediana de `distância / cos θ` — exata para esfera, ~10% a mais para cilindro). A região cresce por *flood fill* a partir da pincelada **dentro** da bola e só por vértices cuja normal aponta para fora do centro (cos ≥ 0,4). Isso envolve a cabeça/membro inteiro e para na junção — sem engolir ombro ou tronco. Sementes negativas encolhem as bolas que as alcançariam.
+2b. **Linhas de feição** (vincos com dobra > 34°: barra de roupa, linha do cabelo, junções): a região‑semente cresce até elas e para; atravessá‑las custa 4× na distância geodésica, então os anéis “grudam” nelas (é o que faz a camiseta sair na barra e o chapéu sair inteiro).
 3. **Anéis geodésicos** com union‑find incremental (até 220 níveis, ~1 nível por 1,5 aresta). Lado A = maior componente de `{d ≥ t}`; **todo o resto é B**, então B sempre contém as sementes. Cascas que as sementes não alcançam ficam em A.
-4. **Escolha**: a regra antiga de pular “anel crescendo como disco” ganhou o teste isoperimétrico (`P² < 5·área(B)` = a região já está fechada) — clicar no rosto agora acha a junção cabeça‑tronco. Até 3 mínimos locais distintos viram candidatos (Tab na UI).
+4. **Escolha**: a regra antiga de pular “anel crescendo como disco” ganhou o teste isoperimétrico (`P² < 5·área(B)` = a região já está fechada) — clicar no rosto agora acha a junção cabeça‑tronco. Até 3 mínimos locais distintos viram candidatos (Tab na UI); entre candidatos quase empatados (≤ 0,15), o mais próximo do clique vem primeiro — quem clica na mão quer a mão.
 5. **Laço ótimo por min‑cut** (`segment/mincut.ts`, Dinic): numa faixa em torno do nível, grafo dual com custo `comprimento × f(dobra)` — barato atravessar vincos côncavos e, menos, arestas vivas convexas (barras, costuras). A região‑semente fica fora da faixa (senão o corte mínimo encolhe em volta do clique). Limpeza: ilhas de A cercadas por B viram B; ilhas de B sem semente voltam para A; vértices “beliscados” são resolvidos.
 6. **Laços ordenados** seguindo o sentido das faces de B; mais de um laço quando há alça.
 
@@ -29,10 +30,10 @@ Sem booleanos: cada lado mantém a sua superfície exata e ganha uma **tampa** n
 - `Engine.checkCut`: *dry‑run* real usado na validação ao vivo e antes do commit; erros vêm com `hint` (ação de correção na UI).
 
 ## Medição
-`npm run bench` roda o corpus (`tests/corpus/`) com o v1 congelado como linha de base. Resultado atual em `docs/baseline-smartcut.md`: **v1 41% → v2 73%** de acerto na 1ª sugestão (77% no top‑3) em 22 casos modelados.
+`npm run bench` roda o corpus (`tests/corpus/`) com o v1 congelado como linha de base. Resultado atual em `docs/baseline-smartcut.md`: **v1 41% → v2 91%** de acerto na 1ª sugestão (**95% no top‑3**) em 22 casos modelados. Desempenho (`tests/bench/budget.test.ts`, figura com ~480 mil triângulos): sugestão ~1,0 s na 1ª vez (inclui proxy + BVH) e ~0,35 s depois, hover ~0,13 s, corte por região ~1,7 s.
 
 ## Limitações conhecidas (próximos passos)
-- **Cabelo e roupa** (Fase D2): a fronteira é uma linha de barra/degrau, não um pescoço. Sem linhas de feição fechadas nem segmentação visual multivista (ONNX), o SmartCut ainda corta a cabeça inteira em vez do cabelo e o quadril em vez da cintura. O modo **Casca** já existe para quando a região certa é escolhida.
-- **Membro‑ponte** (perna entre base e quadril) e **alça** (mão na cintura): com um clique, um único nível geodésico não corta as duas pontas ao mesmo tempo. Pincelar o membro inteiro resolve.
+- **Cabelo e roupa** (Fase D2): as linhas de feição geométricas já resolvem degraus nítidos (barra da camiseta, aba do chapéu, linha do cabelo como 2ª sugestão). Costuras suaves, sem degrau na malha, precisam da segmentação visual multivista (ONNX, SAM leve) — não implementada. O modo **Casca** separa o cabelo com espessura quando a região certa é escolhida.
+- **Alça** (mão apoiada na cintura): com um clique, um único nível geodésico não corta as duas pontas ao mesmo tempo (o membro‑ponte simples, como a perna entre base e quadril, já funciona). Pincelar o braço inteiro resolve.
 - **Mapa de partes pré‑calculado**: o hover recalcula a sugestão no proxy em cache (~150–350 ms em 5–150 mil triângulos), não lê um mapa pronto (< 50 ms). Segmentação hierárquica em background é o próximo passo (Fase D).
 - Arrastar o laço sobre a superfície não existe; há “Deslocar ao longo” (nível) e os 3 candidatos.

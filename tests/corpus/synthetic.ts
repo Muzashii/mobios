@@ -21,6 +21,8 @@ export interface Expect {
   bMax?: (number | null)[];
   /** B volume / total volume range. */
   share: [number, number];
+  /** Where the seam sits: range per axis for the joint's centre (null = free). */
+  seam?: ([number, number] | null)[];
 }
 
 export interface CorpusCase {
@@ -134,7 +136,8 @@ export const CORPUS: CorpusCase[] = [
     } }),
     seeds: [[0, 0, 112]],
     radius: 4,
-    expect: { bMin: [null, null, 97], share: [0.002, 0.06] },
+    // Plan 3.6: the hair as a shell, or "casca cheia" (everything above the hairline).
+    expect: { bMin: [null, null, 97], share: [0.002, 0.08] },
   },
   {
     id: 'shirt-pants',
@@ -144,7 +147,8 @@ export const CORPUS: CorpusCase[] = [
     seeds: [[0, -18, 66]],
     negSeeds: [[0, -15.6, 49]],
     radius: 4,
-    expect: { bMin: [null, null, 54], share: [0.35, 0.8] },
+    // B is the upper body (its hands hang below the waist): judge by where the seam sits.
+    expect: { seam: [null, null, [55, 61]], share: [0.3, 0.6] },
   },
   {
     id: 'tail',

@@ -122,7 +122,7 @@ flowchart LR
 
 - **Geometria fora da tela** — todo corte, encaixe e reparo roda num Web Worker com o [manifold-3d](https://github.com/elalish/manifold), que garante malhas sempre fechadas (manifold). A interface nunca trava.
 - **Histórico reexecutável** — o projeto é uma lista de operações com IDs determinísticos. Editar o corte nº 1 recalcula só dali em diante, reaproveitando o resto.
-- **SmartCut v2** — região‑semente pela *Shape Diameter Function* (com BVH), anéis geodésicos pontuados por perímetro e concavidade, laço ajustado por *min-cut* nas dobras e corte pela própria região (tampa curva), sem achatar num plano. Acerto medido num corpus: 41% → 73% na 1ª sugestão ([linha de base](docs/baseline-smartcut.md), [ADR 0008](docs/ADR/0008-smartcut-v2-corte-por-regiao.md)). Raio‑X: [ADR 0009](docs/ADR/0009-raio-x-e-reparo-nao-destrutivo.md).
+- **SmartCut v2** — região‑semente pela *Shape Diameter Function* (com BVH), anéis geodésicos pontuados por perímetro e concavidade, laço ajustado por *min-cut* nas dobras e corte pela própria região (tampa curva), sem achatar num plano. Acerto medido num corpus: 41% → 91% na 1ª sugestão (95% entre as 3 primeiras) ([linha de base](docs/baseline-smartcut.md), [ADR 0008](docs/ADR/0008-smartcut-v2-corte-por-regiao.md)). Raio‑X: [ADR 0009](docs/ADR/0009-raio-x-e-reparo-nao-destrutivo.md).
 - **Leve para abrir** — o motor 3D e o WASM só carregam quando há um modelo. A primeira tela carrega 180 KB de JavaScript (gzip).
 
 Todas as decisões de arquitetura estão registradas em [`docs/ADR`](docs/ADR), e a especificação completa em [`docs/SPEC.md`](docs/SPEC.md).
