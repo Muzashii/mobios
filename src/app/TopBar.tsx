@@ -38,7 +38,7 @@ export function TopBar() {
           <IconLogo size={16} />
         </span>
         <h1 className="text-sm font-semibold tracking-tight">
-          Fenda <span className="hidden font-normal text-muted sm:inline">Studio</span>
+          Mobios
         </h1>
       </div>
 
@@ -53,7 +53,7 @@ export function TopBar() {
             <MenuItem onSelect={() => void openFilePicker()} shortcut="Ctrl+O">Abrir modelo ou projeto…</MenuItem>
             <MenuItem onSelect={() => void openExample()}>Abrir exemplo</MenuItem>
             <Menu.Separator className="my-1 h-px bg-line" />
-            <MenuItem onSelect={saveProjectFile} shortcut="Ctrl+S">Salvar projeto (.fenda)</MenuItem>
+            <MenuItem onSelect={saveProjectFile} shortcut="Ctrl+S">Salvar projeto (.mobios)</MenuItem>
             <MenuItem onSelect={() => void newProject()}>Novo projeto</MenuItem>
           </Menu.Content>
         </Menu.Portal>
@@ -100,7 +100,7 @@ export function TopBar() {
             <MenuItem onSelect={() => void exportParts('obj-zip')}>Todas as partes — OBJ (.zip)</MenuItem>
             <MenuItem onSelect={() => void exportAssemblyGuide()}>Guia de montagem (HTML com imagens)</MenuItem>
             <Menu.Separator className="my-1 h-px bg-line" />
-            <MenuItem onSelect={saveProjectFile}>Projeto editável (.fenda)</MenuItem>
+            <MenuItem onSelect={saveProjectFile}>Projeto editável (.mobios)</MenuItem>
           </Menu.Content>
         </Menu.Portal>
       </Menu.Root>

@@ -7,7 +7,7 @@ import { setUI, useUI } from '../store/ui';
 import { Button, Kbd, cx } from '../ui/components';
 import { IconCheck, IconX } from '../ui/icons';
 
-const KEY = 'fenda-onboarding-done';
+const KEY = 'mobios-onboarding-done';
 const readDone = () => {
   try {
     return localStorage.getItem(KEY) === '1';

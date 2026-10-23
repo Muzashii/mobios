@@ -39,12 +39,12 @@ export function parseSTL(buffer: ArrayBuffer): Float32Array {
 }
 
 /** Binary STL (normals computed per facet). */
-export function writeSTL(mesh: MeshData, name = 'fenda'): Uint8Array {
+export function writeSTL(mesh: MeshData, name = 'mobios'): Uint8Array {
   const { positions: p, indices: t } = mesh;
   const n = t.length / 3;
   const buf = new ArrayBuffer(84 + n * 50);
   const view = new DataView(buf);
-  const header = new TextEncoder().encode(`Fenda Studio ${name}`.slice(0, 79));
+  const header = new TextEncoder().encode(`Mobios ${name}`.slice(0, 79));
   new Uint8Array(buf, 0, 80).set(header);
   view.setUint32(80, n, true);
   let o = 84;

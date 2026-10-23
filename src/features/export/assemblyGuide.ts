@@ -102,7 +102,7 @@ th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute
 <h2>Visão explodida</h2><img class="hero" alt="Todas as partes separadas" src="${shots[0] ?? ''}">
 <h2>Partes</h2><table><thead><tr><th>Parte</th><th>Tamanho</th><th>Material</th><th>Filamento</th></tr></thead><tbody>${partRows}</tbody></table>
 <h2>Passo a passo</h2>${steps || '<p class="sub">Nenhuma junta — a peça é inteira.</p>'}
-<p class="hint" style="margin-top:32px">Gerado pelo Fenda Studio. Imprima a peça de calibração para escolher a folga ideal da sua impressora.</p>
+<p class="hint" style="margin-top:32px">Gerado pelo Mobios. Imprima a peça de calibração para escolher a folga ideal da sua impressora.</p>
 </main></body></html>`;
   downloadBytes(html, `${safeFileName(doc.name)}-montagem.html`, 'text/html');
   toast('success', 'Guia de montagem gerado', `${order.length} passo(s) com imagens.`);

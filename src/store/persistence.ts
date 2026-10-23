@@ -2,7 +2,9 @@ import { openDB, type IDBPDatabase } from 'idb';
 import type { MeshData } from '../geometry/types';
 import type { ProjectDoc } from './project';
 
-const DB_NAME = 'fenda-studio';
+const DB_NAME = 'mobios';
+/** Database used before the product was renamed; read once to migrate the autosave. */
+const LEGACY_DB = 'fenda-studio';
 const CURRENT = 'current';
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
@@ -14,7 +16,7 @@ const db = () =>
     },
   }));
 
-/** Source meshes in memory (needed for `.fenda` export and worker restarts). */
+/** Source meshes in memory (needed for `.mobios` export and worker restarts). */
 export const sourceMeshes = new Map<string, MeshData>();
 
 export async function saveMesh(id: string, mesh: MeshData) {
@@ -43,20 +45,40 @@ export async function saveDocNow(doc: ProjectDoc) {
   }
 }
 
+async function readProject(d: IDBPDatabase) {
+  const doc = (await d.get('docs', CURRENT)) as ProjectDoc | undefined;
+  if (!doc || doc.schema !== 1) return null;
+  const meshes: Record<string, MeshData> = {};
+  for (const s of doc.sources) {
+    const m = (await d.get('meshes', s.id)) as MeshData | undefined;
+    if (m) meshes[s.id] = m;
+  }
+  return { doc, meshes };
+}
+
+/** Autosave left by the pre-rename build, copied into the new database once. */
+async function migrateLegacy() {
+  try {
+    if (indexedDB.databases && !(await indexedDB.databases()).some((x) => x.name === LEGACY_DB)) return null;
+    const old = await openDB(LEGACY_DB);
+    const found = old.objectStoreNames.contains('docs') ? await readProject(old) : null;
+    old.close();
+    if (!found) return null;
+    const d = await db();
+    await d.put('docs', found.doc, CURRENT);
+    for (const [id, m] of Object.entries(found.meshes)) await d.put('meshes', m, id);
+    return found;
+  } catch {
+    return null;
+  }
+}
+
 export async function loadCurrent(): Promise<{ doc: ProjectDoc; meshes: Record<string, MeshData> } | null> {
   try {
-    const d = await db();
-    const doc = (await d.get('docs', CURRENT)) as ProjectDoc | undefined;
-    if (!doc || doc.schema !== 1) return null;
-    const meshes: Record<string, MeshData> = {};
-    for (const s of doc.sources) {
-      const m = (await d.get('meshes', s.id)) as MeshData | undefined;
-      if (m) {
-        meshes[s.id] = m;
-        sourceMeshes.set(s.id, m);
-      }
-    }
-    return { doc, meshes };
+    const found = (await readProject(await db())) ?? (await migrateLegacy());
+    if (!found) return null;
+    for (const [id, m] of Object.entries(found.meshes)) sourceMeshes.set(id, m);
+    return found;
   } catch {
     return null;
   }

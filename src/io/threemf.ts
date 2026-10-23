@@ -180,7 +180,7 @@ export function write3MF(parts: ThreeMFPart[], opts: { layout?: 'assembled' | 'g
     .join('');
   const model = `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="pt-BR" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
-<metadata name="Application">Fenda Studio</metadata>
+<metadata name="Application">Mobios</metadata>
 <resources><basematerials id="1">${materials}</basematerials>${objects.join('')}</resources>
 <build>${items}</build>
 </model>`;

@@ -131,7 +131,7 @@ describe('import + export pipeline', () => {
     service.engine.dispose();
   });
 
-  it('.fenda project pack/unpack', () => {
+  it('.mobios project pack/unpack', () => {
     const doc = { name: 'Teste', operations: [] };
     const box = boxMesh(3);
     const { doc: d, meshes } = unpackProject<typeof doc>(packProject(doc, { s1: box }));

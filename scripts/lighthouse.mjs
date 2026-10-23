@@ -19,7 +19,7 @@ if (!chrome) {
   process.exit(1);
 }
 
-const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fenda-lh-'));
+const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mobios-lh-'));
 const categories = ['performance', 'accessibility', 'best-practices', 'seo'];
 let failed = false;
 for (const preset of ['desktop', 'mobile']) {

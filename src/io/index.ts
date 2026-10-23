@@ -37,7 +37,7 @@ export function zipFiles(files: Record<string, Uint8Array | string>): Uint8Array
   return zipSync(entries, { level: 6 });
 }
 
-/** Serialized `.fenda` project: project.json + one binary per source mesh. */
+/** Serialized `.mobios` project: project.json + one binary per source mesh. */
 export function packProject(doc: unknown, meshes: Record<string, MeshData>): Uint8Array {
   const files: Record<string, Uint8Array> = { 'project.json': strToU8(JSON.stringify(doc, null, 2)) };
   for (const [id, m] of Object.entries(meshes)) {
@@ -54,7 +54,7 @@ export function packProject(doc: unknown, meshes: Record<string, MeshData>): Uin
 export function unpackProject<T>(data: Uint8Array): { doc: T; meshes: Record<string, MeshData> } {
   const files = unzipSync(data);
   const json = files['project.json'];
-  if (!json) throw new Error('Arquivo .fenda inválido (sem project.json).');
+  if (!json) throw new Error('Arquivo de projeto inválido (sem project.json).');
   const meshes: Record<string, MeshData> = {};
   for (const [name, bytes] of Object.entries(files)) {
     const m = /^meshes\/(.+)\.bin$/.exec(name);

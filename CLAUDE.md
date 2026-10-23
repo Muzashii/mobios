@@ -1,4 +1,4 @@
-# Fenda Studio
+# Mobios
 App web para cortar modelos 3D em partes imprimíveis com encaixes. Especificação completa em docs/SPEC.md — leia antes de qualquer tarefa.
 
 ## Regras
@@ -15,7 +15,7 @@ App web para cortar modelos 3D em partes imprimíveis com encaixes. Especificaç
 
 ## Mapa rápido
 - `src/geometry/` — motor puro (roda no worker): `engine.ts` reexecuta o histórico com cache por prefixo; `cut.ts`, `cutters.ts` (perfis e traço livre), `smartcut.ts`, `connectors.ts`, `labels.ts` (numeração gravada), `autosplit.ts`, `printability.ts`, `hollow.ts`, `placement.ts`, `repair.ts`, `analysis.ts`.
-- `src/io/` — STL/OBJ/3MF (import/export), ZIP e arquivo `.fenda`.
+- `src/io/` — STL/OBJ/3MF (import/export), ZIP e arquivo de projeto `.mobios` (abre também `.fenda`, o formato de antes do nome final).
 - `src/store/` — documento do projeto (imutável), commands + histórico (undo/redo), persistência IndexedDB.
 - `src/features/*` — UI por funcionalidade; `src/ui/` design system.
 - Decisões: `docs/ADR/`.

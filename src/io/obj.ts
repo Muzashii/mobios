@@ -46,7 +46,7 @@ export function parseOBJ(text: string, fallbackName = 'OBJ'): NamedMesh[] {
 
 export function writeOBJ(mesh: MeshData, name: string): string {
   const { positions: p, indices: t } = mesh;
-  const out: string[] = [`# Fenda Studio`, `o ${name}`];
+  const out: string[] = [`# Mobios`, `o ${name}`];
   for (let i = 0; i < p.length; i += 3) out.push(`v ${+p[i].toFixed(5)} ${+p[i + 1].toFixed(5)} ${+p[i + 2].toFixed(5)}`);
   for (let i = 0; i < t.length; i += 3) out.push(`f ${t[i] + 1} ${t[i + 1] + 1} ${t[i + 2] + 1}`);
   return out.join('\n') + '\n';

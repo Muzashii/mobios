@@ -117,7 +117,7 @@ export const useUI = create<UIState>(() => ({
   toasts: [],
   theme: (() => {
     try {
-      return localStorage.getItem('fenda-theme') === 'light' ? 'light' : 'dark';
+      return (localStorage.getItem('mobios-theme') ?? localStorage.getItem('fenda-theme')) === 'light' ? 'light' : 'dark';
     } catch {
       return 'dark';
     }

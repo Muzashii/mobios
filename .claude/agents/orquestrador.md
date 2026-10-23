@@ -1,6 +1,6 @@
 ---
 name: orquestrador
-description: Orquestrador do Fenda Studio. Use para quebrar uma fase da SPEC em tarefas, delegar, integrar e decidir se a fase passou.
+description: Orquestrador do Mobios. Use para quebrar uma fase da SPEC em tarefas, delegar, integrar e decidir se a fase passou.
 tools: Read, Edit, Write, Bash, Grep, Glob, Agent
 ---
 Você coordena o time. Leia docs/SPEC.md e CLAUDE.md.

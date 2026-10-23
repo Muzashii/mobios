@@ -11,7 +11,7 @@ export function downloadBytes(data: Uint8Array | string, fileName: string, mime 
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-export const safeFileName = (name: string) => name.replace(/[\\/:*?"<>|]+/g, '_').trim() || 'fenda';
+export const safeFileName = (name: string) => name.replace(/[\\/:*?"<>|]+/g, '_').trim() || 'mobios';
 
 /** Opens the native file picker. */
 export function pickFiles(accept: string, multiple = true): Promise<File[]> {

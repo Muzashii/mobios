@@ -1,7 +1,7 @@
-# Projeto **Fenda Studio** — Cortes inteligentes e encaixes para impressão 3D
+# Projeto **Mobios** — Cortes inteligentes e encaixes para impressão 3D
 
 > Documento de especificação para construir a aplicação com um **time de agentes de IA** (Claude Code + subagentes).
-> Nome "Fenda Studio" é provisório.
+> Nome do produto: **Mobios** (o nome provisório era "Fenda Studio").
 > Referência estudada: **Nativos Studio Pro** (page.nativos3d.com), ferramenta "Intelligent Multi-Part Cuts" / "Mesh Cut — SmartCut".
 
 ---
@@ -118,7 +118,7 @@ Parâmetros comuns: tamanho, profundidade, **folga (tolerância)**, chanfro de e
 
 ### 3.8 Projeto e produtividade
 - [MVP] Undo/redo ilimitado; histórico de operações editável (editar um corte antigo recalcula os seguintes).
-- [MVP] Salvar projeto localmente (IndexedDB) e exportar `.fenda` (JSON + malhas).
+- [MVP] Salvar projeto localmente (IndexedDB) e exportar `.mobios` (JSON + malhas).
 - [v1] Árvore de partes (outliner): renomear, ocultar, isolar, travar, mesclar duas partes.
 - [v1] Atalhos de teclado completos + paleta de comandos (Ctrl+K).
 - [v2] Biblioteca de presets de conectores do usuário.
@@ -179,7 +179,7 @@ Parâmetros comuns: tamanho, profundidade, **folga (tolerância)**, chanfro de e
 **Layout:**
 ```
 ┌───────────────────────────────────────────────────────────────┐
-│ ◆ Fenda   Projeto: Dragão.fenda        [Desfazer][Refazer] [Exportar] │
+│ ◆ Mobios  Projeto: Dragão.mobios       [Desfazer][Refazer] [Exportar] │
 ├────┬──────────────────────────────────────────────┬───────────┤
 │ 🔪 │                                              │ INSPECTOR │
 │ ✋ │                VIEWPORT 3D                   │ Corte     │
@@ -237,7 +237,7 @@ interface Joint { id: JointId; a: PartId; b: PartId; cutFace: Polygon3D[] }
 ## 7. Estrutura do repositório
 
 ```
-fenda-studio/
+mobios/
 ├─ CLAUDE.md
 ├─ docs/SPEC.md            (este arquivo)  docs/ADR/  docs/design/
 ├─ .claude/agents/         (definições dos subagentes)
@@ -342,7 +342,7 @@ Regras:
 ## 12. Conteúdo para `CLAUDE.md`
 
 ```markdown
-# Fenda Studio
+# Mobios
 App web para cortar modelos 3D em partes imprimíveis com encaixes. Especificação completa em docs/SPEC.md — leia antes de qualquer tarefa.
 
 ## Regras
@@ -365,7 +365,7 @@ App web para cortar modelos 3D em partes imprimíveis com encaixes. Especificaç
 ## 13. Prompt de kickoff (colar no Claude Code)
 
 ```
-Você é o orquestrador do projeto Fenda Studio. Leia docs/SPEC.md por completo.
+Você é o orquestrador do projeto Mobios. Leia docs/SPEC.md por completo.
 Execute a Fase 0 e depois a Fase 1 da seção 10, delegando aos subagentes definidos em .claude/agents
 conforme a tabela da seção 9. Para cada fase:
 1) liste as tarefas com critério de aceite;

@@ -1,4 +1,4 @@
-# Fenda Studio
+# Mobios
 
 Corte modelos 3D em partes imprimíveis, gere encaixes que encaixam na primeira impressão e exporte tudo pronto para o Bambu Studio — direto no navegador.
 
@@ -30,8 +30,8 @@ npx playwright install chromium && npm run e2e   # E2E com screenshot
 | Multicolor | 4 slots de filamento (AMS/BMCU), ferramenta de pintura por parte |
 | Preparação | **Auto-split**: divide a peça com o menor número de cortes para caber na impressora, nas seções mais estreitas, com pinos soltos e numeração; **análise de impressão** (balanços > 45°, base, paredes finas); **orientação sugerida** aplicada na exportação; **oco para resina** com drenos e aviso de ventosa |
 | Análise | Dimensões, volume, material estimado, cabe na impressora (Bambu A1/A1 mini/X1, Mars 5 Ultra), área de colagem |
-| Exportar | 3MF com um objeto por parte e slot de filamento (Bambu Studio), STL/OBJ em ZIP (pinos soltos empacotados, orientação aplicada), projeto `.fenda`, **guia de montagem HTML** com imagens de cada passo |
-| Projeto | Autosave no IndexedDB, abrir/salvar `.fenda`, tema claro/escuro, paleta de comandos (Ctrl+K), **tour de primeiros passos**, **PWA instalável e offline** (abre .stl/.3mf direto do sistema) |
+| Exportar | 3MF com um objeto por parte e slot de filamento (Bambu Studio), STL/OBJ em ZIP (pinos soltos empacotados, orientação aplicada), projeto `.mobios`, **guia de montagem HTML** com imagens de cada passo |
+| Projeto | Autosave no IndexedDB, abrir/salvar `.mobios`, tema claro/escuro, paleta de comandos (Ctrl+K), **tour de primeiros passos**, **PWA instalável e offline** (abre .stl/.3mf/.mobios direto do sistema) |
 | Acessibilidade | Navegação por teclado, link para pular ao painel, contraste AA nos dois temas, respeita "reduzir movimento" |
 
 ## Atalhos

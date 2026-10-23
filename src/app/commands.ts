@@ -20,7 +20,7 @@ export function toggleTheme() {
   const theme = useUI.getState().theme === 'dark' ? 'light' : 'dark';
   setUI({ theme });
   try {
-    localStorage.setItem('fenda-theme', theme);
+    localStorage.setItem('mobios-theme', theme);
   } catch {
     // Private mode: keep it for this session only.
   }
@@ -53,9 +53,9 @@ export function toggleSelectedVisibility() {
 
 /** Single registry: drives the command palette (Ctrl+K) and documents shortcuts. */
 export const APP_COMMANDS: AppCommand[] = [
-  { id: 'open', label: 'Abrir modelo (STL, OBJ, 3MF, .fenda)', shortcut: 'Ctrl+O', group: 'Arquivo', run: () => void openFilePicker() },
+  { id: 'open', label: 'Abrir modelo (STL, OBJ, 3MF, .mobios)', shortcut: 'Ctrl+O', group: 'Arquivo', run: () => void openFilePicker() },
   { id: 'example', label: 'Abrir exemplo', group: 'Arquivo', run: () => void openExample() },
-  { id: 'save', label: 'Salvar projeto (.fenda)', shortcut: 'Ctrl+S', group: 'Arquivo', run: saveProjectFile },
+  { id: 'save', label: 'Salvar projeto (.mobios)', shortcut: 'Ctrl+S', group: 'Arquivo', run: saveProjectFile },
   { id: 'new', label: 'Novo projeto', group: 'Arquivo', run: () => void newProject() },
   { id: 'export-3mf', label: 'Exportar 3MF multi-objeto (Bambu Studio)', shortcut: 'Ctrl+E', group: 'Exportar', run: () => void exportParts('3mf') },
   { id: 'export-stl', label: 'Exportar todas as partes em STL (.zip)', group: 'Exportar', run: () => void exportParts('stl-zip') },

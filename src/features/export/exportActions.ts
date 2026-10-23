@@ -44,10 +44,10 @@ export async function exportParts(format: ExportFormat) {
   }
 }
 
-/** Saves the editable project (`.fenda`: JSON history + source meshes). */
+/** Saves the editable project (`.mobios`: JSON history + source meshes). */
 export function saveProjectFile() {
   const doc = getDoc();
   const meshes = Object.fromEntries(doc.sources.filter((s) => sourceMeshes.has(s.id)).map((s) => [s.id, sourceMeshes.get(s.id)!]));
-  downloadBytes(packProject(doc, meshes), `${safeFileName(doc.name)}.fenda`);
-  toast('success', 'Projeto salvo como .fenda');
+  downloadBytes(packProject(doc, meshes), `${safeFileName(doc.name)}.mobios`);
+  toast('success', 'Projeto salvo como .mobios');
 }

@@ -10,7 +10,9 @@ import { pruneMeshes, saveDocNow, saveMesh } from '../../store/persistence';
 import { requestEvaluate } from '../../store/sync';
 import { focus, setUI, toast, useUI } from '../../store/ui';
 
-export const ACCEPT = '.stl,.obj,.3mf,.fenda';
+// `.fenda` is the pre-rename project extension; still opened.
+export const ACCEPT = '.stl,.obj,.3mf,.mobios,.fenda';
+const isProjectFile = (name: string) => /\.(mobios|fenda)$/i.test(name);
 
 function scaleWarning(m: ImportedMesh) {
   const p = m.mesh.positions;
@@ -41,8 +43,8 @@ async function registerImported(list: ImportedMesh[], label: string) {
 
 export async function importFiles(files: File[]) {
   for (const file of files) {
-    if (file.name.toLowerCase().endsWith('.fenda')) {
-      await openFenda(file);
+    if (isProjectFile(file.name)) {
+      await openProjectFile(file);
       continue;
     }
     setUI({ busy: true, busyLabel: `Importando ${file.name}…` });
@@ -81,7 +83,7 @@ export async function addCalibration() {
   await registerImported(list, `Peça de calibração ${tech === 'FDM' ? 'FDM' : 'Resina'} adicionada — imprima e escolha a folga que encaixa`);
 }
 
-export async function openFenda(file: File) {
+export async function openProjectFile(file: File) {
   try {
     const { doc, meshes } = unpackProject<ProjectDoc>(new Uint8Array(await file.arrayBuffer()));
     if (doc.schema !== 1) throw new Error('Versão de projeto desconhecida.');

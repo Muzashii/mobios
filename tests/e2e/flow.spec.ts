@@ -4,8 +4,8 @@ import { expect, test } from '@playwright/test';
 test('exemplo → corte com pino → exportar 3MF', async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => {
-    indexedDB.deleteDatabase('fenda-studio');
-    localStorage.setItem('fenda-onboarding-done', '1');
+    indexedDB.deleteDatabase('mobios');
+    localStorage.setItem('mobios-onboarding-done', '1');
   });
   await page.reload();
 
@@ -32,8 +32,8 @@ test('exemplo → corte com pino → exportar 3MF', async ({ page }) => {
 test('tour de primeiros passos avança com as ações', async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => {
-    indexedDB.deleteDatabase('fenda-studio');
-    localStorage.removeItem('fenda-onboarding-done');
+    indexedDB.deleteDatabase('mobios');
+    localStorage.removeItem('mobios-onboarding-done');
   });
   await page.reload();
   await page.getByTestId('open-example').click();

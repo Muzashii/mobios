@@ -20,7 +20,7 @@ Celular final: FCP 2,4 s · LCP 2,7 s · TBT ≈ 20–50 ms · CLS 0.
 
 ## PWA
 - `vite-plugin-pwa` (generateSW, `autoUpdate`): precache de JS/CSS/HTML/**WASM**/fontes/ícones (~2,7 MB) → funciona offline.
-- Manifest pt-BR com ícones PNG gerados por `scripts/make-icons.mjs` (sem dependências) e **`file_handlers`** para .stl/.obj/.3mf/.fenda; o app instalado recebe arquivos via `launchQueue`.
+- Manifest pt-BR com ícones PNG gerados por `scripts/make-icons.mjs` (sem dependências) e **`file_handlers`** para .stl/.obj/.3mf/.mobios (e o antigo .fenda); o app instalado recebe arquivos via `launchQueue`.
 - **Tauri** fica para depois: exige toolchain Rust e não acrescenta recursos que o PWA não cubra hoje (offline, instalação, abrir arquivos).
 
 ## Acessibilidade
