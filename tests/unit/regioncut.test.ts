@@ -248,6 +248,29 @@ describe('SmartCut v2 — corte por região', () => {
     service.engine.dispose();
   });
 
+  it('hover/click anywhere on the head picks the head at the real junction (regression from the UI)', () => {
+    const service = svc();
+    service.engine.addSource('s', exampleFigure(wasm));
+    service.evaluate(SRC, []);
+    // Front of the face, side of the head, top: same answer — the head–torso junction ring
+    // (head r 13 meets the torso dome at z ≈ 87.3, ring perimeter ≈ 2π·7.4 ≈ 46 mm).
+    for (const p of [[0, -13, 98], [9, -9, 100], [0, 0, 111]] as Vec3[]) {
+      const s = service.smartCut('s', [p], 4);
+      const c = s.candidates[0];
+      expect(c.name).toBe('Cabeça');
+      expect(c.plane.origin[2]).toBeGreaterThan(84);
+      expect(c.plane.origin[2]).toBeLessThan(91);
+      expect(c.perimeter).toBeLessThan(60);
+      expect(c.areaShare).toBeLessThan(0.15);
+    }
+    // A click on the hand stops at the wrist, a click on the upper arm at the shoulder.
+    const hand = service.smartCut('s', [[-36, -5, 50]], 4).candidates[0];
+    expect(hand.areaShare).toBeLessThan(0.05);
+    const arm = service.smartCut('s', [[30, -5, 57]], 4).candidates[0];
+    expect(arm.plane.origin[2]).toBeGreaterThan(66);
+    service.engine.dispose();
+  });
+
   it('hover returns the part under the cursor', () => {
     const service = svc();
     service.engine.addSource('s', exampleFigure(wasm));

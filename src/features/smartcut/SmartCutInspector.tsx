@@ -7,6 +7,7 @@ import { setUI } from '../../store/ui';
 export function SmartCutInspector() {
   const brush = useUI((s) => s.brush);
   const part = useUI((s) => s.parts.find((p) => p.id === s.brush.target));
+  const hover = useUI((s) => s.hover);
   const setRadius = (radius: number) => setUI({ brush: { ...useUI.getState().brush, radius } });
 
   return (
@@ -14,20 +15,26 @@ export function SmartCutInspector() {
       <div className="min-h-0 flex-1 overflow-y-auto">
         <Section title="SmartCut" aside={<span className="truncate text-[11px] text-muted">{part?.name ?? 'nenhuma parte'}</span>}>
           <p className="text-[11px] leading-snug text-muted">
-            Pincele a região que quer separar (ex.: o braço inteiro) — ou só clique na ponta dela. O SmartCut procura o anel mais estreito e
-            côncavo (ombro, pescoço, cintura) e propõe um corte limitado que você ainda pode ajustar.
+            Passe o mouse: a parte que o SmartCut separaria acende (cabeça, braço, mão…). Clique para cortá-la. A emenda segue o contorno real
+            (pescoço, ombro, cintura) — não é mais um plano.
           </p>
           <ol className="space-y-1 text-[11px] text-muted">
             <li>
-              <span className="text-accent">1</span> Arraste com o botão esquerdo sobre a peça
+              <span className="text-accent">1</span> Passe o mouse e clique na parte
             </li>
             <li>
-              <span className="text-accent">2</span> Gire a vista com o botão direito
+              <span className="text-accent">2</span> Ou pincele (arraste) e aperte <Kbd>Enter</Kbd> — regiões separadas viram cortes separados
             </li>
             <li>
-              <span className="text-accent">3</span> <Kbd>Enter</Kbd> para sugerir o corte
+              <span className="text-accent">3</span> <Kbd>Shift</Kbd> + pincel marca o que <b>não</b> pode sair junto (ex.: o tronco)
+            </li>
+            <li>
+              <span className="text-accent">4</span> Gire a vista com o botão direito
             </li>
           </ol>
+          <p className="min-h-4 text-[11px] text-accent" aria-live="polite">
+            {hover ? `Sob o cursor: ${hover.name ?? 'Parte'} · confiança ${Math.round(hover.confidence * 100)}%` : ''}
+          </p>
           <Field label="Raio do pincel">
             {(id) => (
               <div className="space-y-1.5">
@@ -39,12 +46,17 @@ export function SmartCutInspector() {
           <div className="flex items-center justify-between text-[11px] text-muted">
             <span>
               Pinceladas: <span className="num text-text">{brush.seeds.length}</span>
+              {brush.negSeeds.length > 0 && (
+                <>
+                  {' '}· manter: <span className="num text-text">{brush.negSeeds.length}</span>
+                </>
+              )}
             </span>
             <span>
               <Kbd>[</Kbd> <Kbd>]</Kbd> ajustam o raio
             </span>
           </div>
-          <Button size="sm" variant="ghost" className="w-full" disabled={!brush.seeds.length} onClick={clearBrush}>
+          <Button size="sm" variant="ghost" className="w-full" disabled={!brush.seeds.length && !brush.negSeeds.length} onClick={clearBrush}>
             <IconTrash size={14} /> Limpar pincel
           </Button>
         </Section>

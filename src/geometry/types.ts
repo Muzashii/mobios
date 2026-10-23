@@ -58,6 +58,8 @@ export interface ConnectorParams {
 export interface SourceRef {
   id: PartId;
   name: string;
+  /** What the Raio-X repair changed on import (shown in the history). */
+  repair?: string;
 }
 
 /** Non-flat joint profile across the cut plane: hides the seam and locks rotation. */

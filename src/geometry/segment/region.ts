@@ -152,12 +152,14 @@ export function clusterSeeds(seeds: Vec3[], radius: number): Vec3[][] {
 
 /** Inflation of the inscribed ball so it reaches around the limb (projected lengths run short). */
 const RADIUS_GAIN = 1.25;
+/** Minimum cos(normal, direction from the ball centre) for a vertex to join the seed region. */
+const FACING = 0.4;
 
 /**
  * Shape Diameter Function per dab: median length of a cone of rays shot inwards. Each dab
  * becomes the ball inscribed in the part there (anchored at the dab, `s`).
  */
-export function seedBalls(ctx: RegionContext, seeds: Vec3[], brushRadius: number): RegionBall[] {
+export function seedBalls(ctx: RegionContext, seeds: Vec3[], brushRadius: number, gain = RADIUS_GAIN): RegionBall[] {
   const { query, topo, diag } = ctx;
   const step = Math.max(1, Math.ceil(seeds.length / 24));
   const balls: RegionBall[] = seeds.map((s) => ({ c: s, r: brushRadius, s }));
@@ -177,7 +179,7 @@ export function seedBalls(ctx: RegionContext, seeds: Vec3[], brushRadius: number
     const o: Vec3 = [hit.point[0] - n[0] * eps, hit.point[1] - n[1] * eps, hit.point[2] - n[2] * eps];
     const lengths: number[] = [];
     let axis = 0;
-    // Axis + one ring at 25°, lengths projected on the inward normal: a wider or denser cone
+    // Axis + one ring at 25°: a wider or denser cone
     // lets rays slip down a neck into the body (the head of a figure is not 60 mm thick).
     const dirs: Vec3[] = [inward];
     const tn = Math.tan(cone);
@@ -190,7 +192,9 @@ export function seedBalls(ctx: RegionContext, seeds: Vec3[], brushRadius: number
       if (!h) continue;
       const cos = d[0] * inward[0] + d[1] * inward[1] + d[2] * inward[2];
       if (d === inward) axis = h.distance;
-      lengths.push(h.distance * cos);
+      // chord / cos θ is exactly the diameter of a sphere (head, hand) and ~10% over for a
+      // cylinder brushed from the side; the median ignores rays that slip down a neck.
+      lengths.push(h.distance / cos);
     }
     if (!lengths.length) continue;
     lengths.sort((x, y) => x - y);
@@ -198,7 +202,7 @@ export function seedBalls(ctx: RegionContext, seeds: Vec3[], brushRadius: number
     const diameter = lengths[Math.floor(lengths.length / 2)];
     if (!(diameter > 0)) continue;
     const depth = Math.min(axis || diameter, diameter) / 2;
-    const r = Math.min(Math.max(brushRadius, (diameter / 2) * RADIUS_GAIN), diag * 0.25);
+    const r = Math.min(Math.max(brushRadius, (diameter / 2) * gain), diag * 0.25);
     balls.push({ c: [hit.point[0] - n[0] * depth, hit.point[1] - n[1] * depth, hit.point[2] - n[2] * depth], r, s });
   }
   return balls;
@@ -218,13 +222,20 @@ export function regionVertices(ctx: RegionContext, balls: RegionBall[]): Uint8Ar
     stamp[startV] = bi;
     const stack = [startV];
     const r2 = b.r * b.r;
+    // Inscribed balls (centre inside the part) also require the surface to face away from the
+    // centre: true all around a head or a limb, false on the shoulder/torso right past the
+    // junction, which a pure distance test would swallow.
+    const inscribed = !!b.s && Math.hypot(b.s[0] - b.c[0], b.s[1] - b.c[1], b.s[2] - b.c[2]) > 1e-6;
+    const vn = topo.vNormal;
     while (stack.length) {
       const v = stack.pop()!;
       for (let k = vStart[v]; k < vStart[v + 1]; k++) {
         const w = vNbr[k];
         if (stamp[w] === bi) continue;
-        const d2 = (p[w * 3] - b.c[0]) ** 2 + (p[w * 3 + 1] - b.c[1]) ** 2 + (p[w * 3 + 2] - b.c[2]) ** 2;
+        const dx = p[w * 3] - b.c[0], dy = p[w * 3 + 1] - b.c[1], dz = p[w * 3 + 2] - b.c[2];
+        const d2 = dx * dx + dy * dy + dz * dz;
         if (d2 > r2) continue;
+        if (inscribed && (dx * vn[w * 3] + dy * vn[w * 3 + 1] + dz * vn[w * 3 + 2]) < FACING * Math.sqrt(d2)) continue;
         stamp[w] = bi;
         inR[w] = 1;
         stack.push(w);
@@ -292,7 +303,7 @@ export function scanLevels(ctx: RegionContext, field: Field, maxCandidates = 3):
   let reachable = 0;
   for (const v of order) reachable += vArea[v];
 
-  interface Level { t: number; perimeter: number; concavity: number; valid: boolean }
+  interface Level { t: number; perimeter: number; concavity: number; valid: boolean; areaB: number }
   const results: Level[] = [];
   let oi = 0, bigRoot = -1, bigArea = 0;
   for (let k = levels - 1; k >= 1; k--) {
@@ -347,7 +358,7 @@ export function scanLevels(ctx: RegionContext, field: Field, maxCandidates = 3):
         conc += (cs / 2) * len;
       }
     }
-    results.push({ t: lt, perimeter, concavity: perimeter ? creaseness(conc / perimeter) : 0, valid });
+    results.push({ t: lt, perimeter, concavity: perimeter ? creaseness(conc / perimeter) : 0, valid, areaB: reachable - bigArea });
   }
 
   const valid = results.filter((r) => r.valid && r.perimeter > 0).reverse(); // near → far
@@ -358,9 +369,12 @@ export function scanLevels(ctx: RegionContext, field: Field, maxCandidates = 3):
   // Around a click the rings first grow like a disc (≈ 2π mm of perimeter per mm) before
   // wrapping around the limb. Candidates start where the perimeter stops growing fast or at
   // a crease.
+  // A ring that already closes the region off (P² ≪ 4π·area, unlike a growing disc where
+  // P² ≈ 4π·area) is a candidate right away: the seed region wraps the head or the limb.
   let start = valid.length - 1;
   for (let i = 0; i < valid.length; i++) {
     if (valid[i].concavity >= 0.35) { start = i; break; }
+    if (valid[i].perimeter ** 2 < 5 * valid[i].areaB) { start = i; break; }
     const next = valid[i + 1];
     if (next && (next.perimeter - valid[i].perimeter) / (next.t - valid[i].t) < 1) { start = i; break; }
   }

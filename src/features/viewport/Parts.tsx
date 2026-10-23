@@ -6,7 +6,7 @@ import { dispatch, useHistory } from '../../store/history';
 import { focus, setUI, useUI, type ViewPart } from '../../store/ui';
 import { ACCENT } from '../../ui/tokens';
 import { partColor } from '../paint/colors';
-import { brushDown, brushMove } from '../smartcut/brush';
+import { brushDown, brushLeave, brushMove } from '../smartcut/brush';
 
 const accent = new Color(ACCENT);
 
@@ -20,7 +20,8 @@ function PartMesh({ part, offset, color, selected, hovered, interactive }: { par
 
   useFrame(({ clock }) => {
     if (!mat.current) return;
-    const base = selected ? 0.22 : hovered ? 0.12 : 0;
+    // SmartCut paints its own hover (the part under the cursor), so the whole-part glow stays off.
+    const base = brushing ? 0 : selected ? 0.22 : hovered ? 0.12 : 0;
     // Non-blocking progress: parts breathe softly while the worker computes.
     const pulse = busy ? 0.06 + 0.06 * Math.sin(clock.elapsedTime * 6) : 0;
     mat.current.emissiveIntensity = base + pulse;
@@ -36,7 +37,7 @@ function PartMesh({ part, offset, color, selected, hovered, interactive }: { par
       onPointerDown={interactive && brushing ? (e) => brushDown(e, part.id, controls) : undefined}
       onPointerMove={interactive && brushing ? (e) => brushMove(e, part.id) : undefined}
       onPointerOver={interactive ? (e) => (e.stopPropagation(), setUI({ hovered: part.id })) : undefined}
-      onPointerOut={interactive ? () => useUI.getState().hovered === part.id && setUI({ hovered: null }) : undefined}
+      onPointerOut={interactive ? () => { brushLeave(part.id); if (useUI.getState().hovered === part.id) setUI({ hovered: null }); } : undefined}
       onClick={
         interactive
           ? (e) => {

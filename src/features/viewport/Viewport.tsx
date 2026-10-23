@@ -12,6 +12,8 @@ import { assemblyOffsets } from '../assembly/assembly';
 import { explodeOffsets } from '../assembly/explode';
 import { BrushLayer } from '../smartcut/BrushLayer';
 import { CutPreview } from './CutPreview';
+import { RegionPreview } from './RegionPreview';
+import { XRayView } from './XRayView';
 import { SurfacePreview } from './SurfacePreview';
 import { viewportRefs } from './viewportRefs';
 import { Parts } from './Parts';
@@ -80,6 +82,12 @@ function CameraRig() {
       if (explode > 0) box.expandByScalar(box.getSize(new Vector3()).length() * 0.35 * explode);
       // Assembly simulation pulls parts apart by ~30% of the scene size per joint level.
       if (assembly !== null) box.expandByScalar(box.getSize(new Vector3()).length() * 0.3);
+    } else if (focusRequest.id === 'box' && focusRequest.box) {
+      const { min, max } = focusRequest.box;
+      box = new Box3(new Vector3(...min), new Vector3(...max));
+      // Tiny problems (one open edge) still get a readable frame.
+      const size = box.getSize(new Vector3()).length();
+      box.expandByScalar(Math.max(size * 0.4, sceneBox.getSize(new Vector3()).length() * 0.04, 2));
     } else {
       const p = parts.find((x) => x.id === focusRequest.id);
       if (!p) return;
@@ -140,6 +148,7 @@ function Scene() {
   const theme = useUI((s) => s.theme);
   const box = useSceneBox();
   const assembly = useUI((s) => s.assembly);
+  const xrayOpen = useUI((s) => !!s.xray);
   const joints = useUI((s) => s.joints);
   const offsets = useMemo(
     () => (assembly !== null ? assemblyOffsets(parts, joints, assembly) : explodeOffsets(parts, explode)),
@@ -173,9 +182,11 @@ function Scene() {
       />
       <BedVolume />
 
-      <Parts offsets={offsets} hiddenId={draft?.target} />
-      {draft && (draft.mode === 'surface' ? <SurfacePreview draft={draft} /> : <CutPreview draft={draft} />)}
+      {/* The Raio-X shows only the mesh being inspected. */}
+      {!xrayOpen && <Parts offsets={offsets} hiddenId={draft?.target} />}
+      {draft && (draft.mode === 'surface' ? <SurfacePreview draft={draft} /> : draft.mode === 'region' ? <RegionPreview draft={draft} /> : <CutPreview draft={draft} />)}
       <BrushLayer />
+      <XRayView />
       <CameraBridge />
 
       <CameraRig />

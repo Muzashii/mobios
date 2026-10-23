@@ -1,6 +1,6 @@
 import type { BufferGeometry } from 'three';
 import { create } from 'zustand';
-import type { ConnectorParams, ConnectorType, CutProfile, JointInfo, OpReport, PartId, PartStats, Plane, StrokeFrame, Vec2, Vec3 } from '../geometry/types';
+import type { Bounds, ConnectorParams, ConnectorType, CutCheck, CutProfile, InspectionReport, JointInfo, OpReport, PartId, PartStats, Plane, RegionBall, RegionCutMode, RepairPlan, SmartCutCandidate, StrokeFrame, Vec2, Vec3 } from '../geometry/types';
 
 export type Tool = 'select' | 'cut' | 'paint' | 'brush' | 'draw';
 
@@ -16,10 +16,28 @@ export interface SurfaceDraft {
   flip: boolean;
 }
 
+/** SmartCut v2 region cut being reviewed (one per cluster of seeds). */
+export interface RegionDraft {
+  balls: RegionBall[];
+  seeds: Vec3[];
+  negSeeds: Vec3[];
+  /** Candidates from the suggestion (Tab cycles); empty when editing an existing cut. */
+  candidates: SmartCutCandidate[];
+  index: number;
+  level: number;
+  mode: RegionCutMode;
+  /** Shell thickness (mm). */
+  depth: number;
+  name: string;
+}
+
 export interface CutDraft {
   target: PartId;
-  /** 'plane' (optionally profiled/bounded) or a free-hand 'surface'. */
-  mode: 'plane' | 'surface';
+  /** 'plane' (optionally profiled/bounded), a free-hand 'surface' or a SmartCut 'region'. */
+  mode: 'plane' | 'surface' | 'region';
+  region?: RegionDraft;
+  /** Other SmartCut clusters to cut in the same commit (dabs on head and hand → 2 cuts). */
+  batch?: RegionDraft[];
   plane: Plane;
   profile: CutProfile | null;
   surface?: SurfaceDraft;
@@ -63,7 +81,37 @@ export interface Toast {
 export interface BrushState {
   target: PartId | null;
   seeds: Vec3[];
+  /** Shift + brush: what must stay with the body. */
+  negSeeds: Vec3[];
   radius: number;
+}
+
+/** Live dry-run of the draft (pre-validation). */
+export interface CutCheckState {
+  key: string;
+  pending: boolean;
+  result: CutCheck | null;
+  /** Part B rendered from the dry-run (region cuts). */
+  previewB?: BufferGeometry;
+}
+
+/** SmartCut hover: the part that would be separated if the user clicked here. */
+export interface HoverPreview {
+  part: PartId;
+  geometry: BufferGeometry;
+  loops: Vec3[][];
+  name?: string;
+  confidence: number;
+}
+
+/** Raio-X panel: inspection reports waiting for the user's repair choices. */
+export interface XRayState {
+  reports: InspectionReport[];
+  index: number;
+  plans: RepairPlan[];
+  /** Issue highlighted in the viewport. */
+  focusIssue: number | null;
+  fileName: string;
 }
 
 interface UIState {
@@ -72,6 +120,9 @@ interface UIState {
   selection: PartId | null;
   hovered: PartId | null;
   draft: CutDraft | null;
+  cutCheck: CutCheckState | null;
+  hover: HoverPreview | null;
+  xray: XRayState | null;
   /** Connector operation open in the inspector. */
   connectorEdit: string | null;
   explode: number;
@@ -94,16 +145,19 @@ interface UIState {
   /** Set after the first successful export (onboarding step 4). */
   exportedOnce: boolean;
   /** Bumped to ask the viewport to frame something. */
-  focusRequest: { id: PartId | 'all'; n: number };
+  focusRequest: { id: PartId | 'all' | 'box'; n: number; box?: Bounds };
   ready: boolean;
 }
 
 export const useUI = create<UIState>(() => ({
   tool: 'select',
-  brush: { target: null, seeds: [], radius: 4 },
+  brush: { target: null, seeds: [], negSeeds: [], radius: 4 },
   selection: null,
   hovered: null,
   draft: null,
+  cutCheck: null,
+  hover: null,
+  xray: null,
   connectorEdit: null,
   explode: 0,
   assembly: null,
@@ -141,4 +195,9 @@ export function toast(kind: ToastKind, title: string, detail?: string, ms = 4500
 
 export function focus(id: PartId | 'all') {
   useUI.setState((s) => ({ focusRequest: { id, n: s.focusRequest.n + 1 } }));
+}
+
+/** Frames an arbitrary box (Raio-X "Mostrar"). */
+export function focusBox(box: Bounds) {
+  useUI.setState((s) => ({ focusRequest: { id: 'box', n: s.focusRequest.n + 1, box } }));
 }
