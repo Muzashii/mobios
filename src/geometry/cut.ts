@@ -84,7 +84,8 @@ export function cutByPlane(wasm: Wasm, part: Manifold, plane: Plane, bounded?: S
 export function dropSlivers(wasm: Wasm, m: Manifold): Manifold {
   const comps = m.decompose();
   const total = Math.abs(m.volume());
-  const keep = comps.filter((c) => c.volume() > total * 1e-6);
+  // |volume|: an internal void is a legit component with negative volume (e.g. resin hollowing).
+  const keep = comps.filter((c) => Math.abs(c.volume()) > total * 1e-6);
   if (keep.length === comps.length) {
     comps.forEach((c) => c.delete());
     return m;

@@ -1,5 +1,6 @@
 import * as Menu from '@radix-ui/react-dropdown-menu';
 import { exportParts, saveProjectFile } from '../features/export/exportActions';
+import { exportAssemblyGuide } from '../features/export/assemblyGuide';
 import { newProject, openExample, openFilePicker } from '../features/import/importActions';
 import { renameProject } from '../store/commands';
 import { dispatch, useHistory } from '../store/history';
@@ -96,6 +97,7 @@ export function TopBar() {
             <MenuItem onSelect={() => void exportParts('3mf')} shortcut="Ctrl+E">3MF multi-objeto (Bambu Studio)</MenuItem>
             <MenuItem onSelect={() => void exportParts('stl-zip')}>Todas as partes — STL (.zip)</MenuItem>
             <MenuItem onSelect={() => void exportParts('obj-zip')}>Todas as partes — OBJ (.zip)</MenuItem>
+            <MenuItem onSelect={() => void exportAssemblyGuide()}>Guia de montagem (HTML com imagens)</MenuItem>
             <Menu.Separator className="my-1 h-px bg-line" />
             <MenuItem onSelect={saveProjectFile}>Projeto editável (.fenda)</MenuItem>
           </Menu.Content>

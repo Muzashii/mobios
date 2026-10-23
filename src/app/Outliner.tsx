@@ -48,7 +48,7 @@ export function Outliner() {
             >
               <span className="h-3 w-3 shrink-0 rounded-[3px] border border-black/20" style={{ background: partColor(doc, p) }} />
               <span className="min-w-0 flex-1 truncate">{meta.name ?? p.name}</span>
-              {!fit.rotated && (
+              {!fit.rotated && !p.id.endsWith('.pins') && (
                 <span title={`Não cabe na ${printer.name}`} className="text-danger">
                   <IconAlert size={13} />
                 </span>

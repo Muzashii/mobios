@@ -18,6 +18,9 @@ function describe(op: Operation, index: number, names: Map<string, string>, labe
   if (op.kind === 'cut-surface') {
     return { icon: <IconCut size={14} />, title: `Corte ${index} livre`, sub: names.get(op.target) ?? 'parte' };
   }
+  if (op.kind === 'hollow') {
+    return { icon: <IconCube size={14} />, title: 'Oco (resina)', sub: `${names.get(op.target) ?? 'parte'} · parede ${op.wall} mm` };
+  }
   if (op.kind === 'label') {
     return { icon: <IconHash size={14} />, title: `Numeração ${labels.get(op.joint) ?? ''}`, sub: `texto ${op.size} mm · ${op.depth} mm de fundo` };
   }

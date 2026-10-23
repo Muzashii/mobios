@@ -2,6 +2,7 @@ import type { Manifold } from 'manifold-3d';
 import { partStats } from './analysis';
 import { applyConnector, CONNECTOR_TYPES } from './connectors';
 import { engraveLabel } from './labels';
+import { hollowPart } from './hollow';
 import { CutError, cutByPlane, faceSection } from './cut';
 import { toDisplayMesh } from './display';
 import { planeFrame } from './math';
@@ -127,7 +128,7 @@ export class Engine {
   private apply(prev: State, op: Operation): Step {
     const key = JSON.stringify(op);
     try {
-      const state = op.kind === 'connector' ? this.applyConnector(prev, op) : op.kind === 'label' ? this.applyLabel(prev, op) : this.applyCut(prev, op);
+      const state = op.kind === 'connector' ? this.applyConnector(prev, op) : op.kind === 'label' ? this.applyLabel(prev, op) : op.kind === 'hollow' ? this.applyHollow(prev, op) : this.applyCut(prev, op);
       return { key, opId: op.id, state: state.state, report: { warnings: state.warnings, info: state.info } };
     } catch (e) {
       const message = e instanceof CutError || e instanceof Error ? e.message : String(e);
@@ -221,6 +222,20 @@ export class Engine {
     if (!clear) warnings.push(`Colisão na montagem simulada (${res.sweepOverlap.toFixed(2)} mm³): aumente a folga.`);
     const label = CONNECTOR_TYPES.find((t) => t.value === op.type)?.label.toLowerCase() ?? op.type;
     return { state: { parts, joints }, warnings, info: `${res.placed}× ${label}${clear ? ' · montagem sem colisão ✓' : ''}` };
+  }
+
+  private applyHollow(prev: State, op: Extract<Operation, { kind: 'hollow' }>) {
+    const target = prev.parts.get(op.target);
+    if (!target) throw new Error('A parte deste oco não existe mais.');
+    const res = hollowPart(this.wasm, target.m, op.wall, op.drainDiameter, op.drainCount);
+    const parts = new Map(prev.parts);
+    parts.set(op.target, { ...target, m: res.part, version: this.versionSeq++, stats: undefined });
+    const saved = (res.removed / 1000).toFixed(1);
+    return {
+      state: { parts, joints: prev.joints },
+      warnings: res.warnings,
+      info: `parede ${op.wall} mm · ${res.drains} dreno(s) · −${saved} cm³ de resina`,
+    };
   }
 
   private applyLabel(prev: State, op: Extract<Operation, { kind: 'label' }>) {

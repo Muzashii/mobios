@@ -23,6 +23,8 @@ export interface PartMeta {
   slot?: number;
   visible?: boolean;
   locked?: boolean;
+  /** Side to put on the build plate when exporting (suggested orientation). */
+  down?: Vec3;
 }
 
 export interface ProjectDoc {

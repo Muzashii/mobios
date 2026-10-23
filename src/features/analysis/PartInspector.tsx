@@ -7,6 +7,7 @@ import { Button, Field, Kbd, Section, mm } from '../../ui/components';
 import { IconAlert, IconCheck, IconCut, IconEye, IconEyeOff, IconFocus, IconTrash } from '../../ui/icons';
 import { startBrush, startCut } from '../cut/cutActions';
 import { SlotPicker } from '../paint/SlotPicker';
+import { PrintPrep } from './PrintPrep';
 
 export function fitsPrinter(size: number[], volume: number[]) {
   const direct = size.every((s, i) => s <= volume[i]);
@@ -73,7 +74,7 @@ export function PartInspector({ part }: { part: ViewPart }) {
         </div>
       </Section>
 
-      <Section title="Imprimibilidade">
+      <Section title="Medidas">
         <div className="grid grid-cols-2 gap-1.5">
           <Stat label="Dimensões (mm)" value={size.map((v) => mm(v, 1)).join(' × ')} />
           <Stat label="Volume" value={`${mm(s.volume / 1000, 1)} cm³`} />
@@ -111,6 +112,7 @@ export function PartInspector({ part }: { part: ViewPart }) {
           </div>
         )}
       </Section>
+      <PrintPrep part={part} fits={fit.rotated || part.id.endsWith('.pins')} />
     </div>
   );
 }

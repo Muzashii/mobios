@@ -296,7 +296,7 @@ export function suggestSmartCut(mesh: MeshData, seeds: Vec3[], seedRadius: numbe
 }
 
 /** Sorted distances of every triangle crossing along a ray (Möller–Trumbore). */
-function rayHits(p: Float32Array, t: Uint32Array, o: Vec3, d: Vec3): number[] {
+export function rayHits(p: Float32Array, t: Uint32Array, o: Vec3, d: Vec3): number[] {
   const hits: number[] = [];
   for (let f = 0; f < t.length; f += 3) {
     const a = t[f] * 3, b = t[f + 1] * 3, c = t[f + 2] * 3;

@@ -81,7 +81,8 @@ export type Operation =
   | { kind: 'cut-plane'; id: string; target: PartId; plane: Plane; bounded?: SphereBounds; profile?: CutProfile }
   | { kind: 'cut-surface'; id: string; target: PartId; frame: StrokeFrame; points: Vec2[]; flip?: boolean }
   | { kind: 'connector'; id: string; joint: string; type: ConnectorType; params: ConnectorParams }
-  | { kind: 'label'; id: string; joint: string; size: number; depth: number };
+  | { kind: 'label'; id: string; joint: string; size: number; depth: number }
+  | { kind: 'hollow'; id: string; target: PartId; wall: number; drainDiameter: number; drainCount: number };
 
 export type CutOperation = Extract<Operation, { kind: 'cut-plane' | 'cut-surface' }>;
 
@@ -167,6 +168,8 @@ export interface ExportPart {
   name: string;
   color: string;
   slot: number;
+  /** Side to put on the plate (suggested orientation); rotated to −Z on export. */
+  down?: Vec3;
 }
 
 export type ExportFormat = 'stl-zip' | '3mf' | 'obj-zip';

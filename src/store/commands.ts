@@ -57,7 +57,7 @@ export function producedParts(op: Operation): PartId[] {
 }
 
 export function consumedParts(op: Operation): PartId[] {
-  return op.kind === 'cut-plane' || op.kind === 'cut-surface' ? [op.target] : [];
+  return op.kind === 'cut-plane' || op.kind === 'cut-surface' || op.kind === 'hollow' ? [op.target] : [];
 }
 
 /** Removes an operation and everything that depends on what it produced. */

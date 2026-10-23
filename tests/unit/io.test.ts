@@ -100,6 +100,18 @@ describe('repair', () => {
   });
 });
 
+it('joins shells that only touch (e.g. boxes modelled side by side)', () => {
+  const a = boxMesh(10), b = boxMesh(10, [10, 0, 0]);
+  const positions = new Float32Array([...a.positions, ...b.positions]);
+  const indices = new Uint32Array([...a.indices, ...Array.from(b.indices, (i) => i + 8)]);
+  const { manifold } = repairMesh(wasm, positions, indices);
+  const bodies = manifold.decompose();
+  expect(bodies).toHaveLength(1);
+  expect(manifold.volume()).toBeCloseTo(2000, 2);
+  bodies.forEach((m) => m.delete());
+  manifold.delete();
+});
+
 describe('import + export pipeline', () => {
   it('imports an STL, cuts it and exports all formats', () => {
     const service = new GeometryService(wasm);

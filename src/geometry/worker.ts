@@ -36,6 +36,15 @@ const api = {
   async smartCut(partId: string, seeds: Vec3[], seedRadius: number, beforeOp?: string) {
     return (await service).smartCut(partId, seeds, seedRadius, beforeOp);
   },
+  async analyze(partId: string, tech: Technology) {
+    return (await service).analyze(partId, tech);
+  },
+  async orientation(partId: string, tech: Technology) {
+    return (await service).orientation(partId, tech);
+  },
+  async autoSplit(partId: string, volume: Vec3, tech: Technology, margin?: number) {
+    return (await service).autoSplit(partId, volume, tech, margin);
+  },
   async example(id: string) {
     return imported([(await service).example(id)])[0];
   },

@@ -3,6 +3,7 @@ import { PartInspector } from '../features/analysis/PartInspector';
 import { ProjectInspector } from '../features/analysis/ProjectInspector';
 import { ConnectorInspector } from '../features/connectors/ConnectorInspector';
 import { LabelInspector } from '../features/connectors/LabelInspector';
+import { HollowInspector } from '../features/analysis/PrintPrep';
 import { useHistory } from '../store/history';
 import { CutInspector } from '../features/cut/CutInspector';
 import { SmartCutInspector } from '../features/smartcut/SmartCutInspector';
@@ -32,7 +33,7 @@ export function Inspector() {
           ) : draft ? (
             <CutInspector draft={draft} />
           ) : connectorEdit ? (
-            editKind === 'label' ? <LabelInspector opId={connectorEdit} /> : <ConnectorInspector opId={connectorEdit} />
+            editKind === 'label' ? <LabelInspector opId={connectorEdit} /> : editKind === 'hollow' ? <HollowInspector opId={connectorEdit} /> : <ConnectorInspector opId={connectorEdit} />
           ) : part ? (
             <PartInspector part={part} />
           ) : (

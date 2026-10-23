@@ -30,6 +30,7 @@ export async function exportParts(format: ExportFormat) {
         name: doc.partMeta[p.id]?.name ?? p.name,
         color: partColor(doc, p),
         slot: doc.partMeta[p.id]?.slot ?? 1,
+        down: doc.partMeta[p.id]?.down,
       })),
     );
     const suffix = format === 'obj-zip' ? '-obj' : '';

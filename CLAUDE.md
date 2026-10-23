@@ -13,12 +13,12 @@ App web para cortar modelos 3D em partes imprimíveis com encaixes. Especificaç
 - `npm run dev` · `npm run test` · `npm run e2e` · `npm run bench` · `npm run build`
 
 ## Mapa rápido
-- `src/geometry/` — motor puro (roda no worker): `engine.ts` reexecuta o histórico com cache por prefixo; `cut.ts`, `cutters.ts` (perfis e traço livre), `smartcut.ts`, `connectors.ts`, `labels.ts` (numeração gravada), `placement.ts`, `repair.ts`, `analysis.ts`.
+- `src/geometry/` — motor puro (roda no worker): `engine.ts` reexecuta o histórico com cache por prefixo; `cut.ts`, `cutters.ts` (perfis e traço livre), `smartcut.ts`, `connectors.ts`, `labels.ts` (numeração gravada), `autosplit.ts`, `printability.ts`, `hollow.ts`, `placement.ts`, `repair.ts`, `analysis.ts`.
 - `src/io/` — STL/OBJ/3MF (import/export), ZIP e arquivo `.fenda`.
 - `src/store/` — documento do projeto (imutável), commands + histórico (undo/redo), persistência IndexedDB.
 - `src/features/*` — UI por funcionalidade; `src/ui/` design system.
 - Decisões: `docs/ADR/`.
 
 ## Fase atual
-Fase 6 — Encaixes avançados (concluída). Fases 0–6 implementadas: pinos quadrado/hexagonal/chaveta, ímã, pino solto, rabo-de-andorinha, numeração gravada, verificação de inserção sem colisão e animação de montagem. Ver docs/ADR/0005.
-Próxima: Fase 7 — Diferenciais (auto-split para a mesa, imprimibilidade, orientação, resina oco + drenagem, guia de montagem).
+Fase 7 — Diferenciais (concluída). Fases 0–7 implementadas: auto-split para a mesa, análise de imprimibilidade, orientação sugerida, oco para resina com drenos, guia de montagem HTML. Ver docs/ADR/0006.
+Próxima: Fase 8 — Polimento (onboarding, paleta, tema claro, acessibilidade, PWA/Tauri; Lighthouse ≥ 90).

@@ -73,11 +73,13 @@ function CameraRig() {
   useEffect(() => {
     const c = controls.current;
     if (!c || focusRequest.n === 0) return;
-    const { parts, explode } = useUI.getState();
+    const { parts, explode, assembly } = useUI.getState();
     let box: Box3;
     if (focusRequest.id === 'all') {
       box = sceneBox.clone();
       if (explode > 0) box.expandByScalar(box.getSize(new Vector3()).length() * 0.35 * explode);
+      // Assembly simulation pulls parts apart by ~30% of the scene size per joint level.
+      if (assembly !== null) box.expandByScalar(box.getSize(new Vector3()).length() * 0.3);
     } else {
       const p = parts.find((x) => x.id === focusRequest.id);
       if (!p) return;

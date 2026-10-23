@@ -249,8 +249,12 @@ function finalize(wasm: Wasm, m: Manifold, report: string[]): Manifold {
   if (parts.length > 1 && parts.every((p) => p.volume() > 0)) {
     const sum = parts.reduce((s, p) => s + p.volume(), 0);
     const merged = wasm.Manifold.union(parts);
-    if (merged.volume() < sum * 0.9999) {
-      report.push(`${parts.length} cascas sobrepostas unidas em um sólido`);
+    // Overlapping (less volume) or merely touching (fewer bodies) shells become one solid.
+    const mergedBodies = merged.decompose();
+    const fewer = mergedBodies.length < parts.length;
+    mergedBodies.forEach((p) => p.delete());
+    if (merged.volume() < sum * 0.9999 || fewer) {
+      report.push(`${parts.length} cascas sobrepostas ou encostadas unidas em um sólido`);
       parts.forEach((p) => p.delete());
       m.delete();
       return merged;

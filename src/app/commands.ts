@@ -1,4 +1,6 @@
 import { exportParts, saveProjectFile } from '../features/export/exportActions';
+import { exportAssemblyGuide } from '../features/export/assemblyGuide';
+import { autoSplitPart } from '../features/analysis/PrintPrep';
 import { addCalibration, newProject, openExample, openFilePicker } from '../features/import/importActions';
 import { startBrush, startCut, startDraw } from '../features/cut/cutActions';
 import { setPartMeta } from '../store/commands';
@@ -58,6 +60,18 @@ export const APP_COMMANDS: AppCommand[] = [
   { id: 'export-3mf', label: 'Exportar 3MF multi-objeto (Bambu Studio)', shortcut: 'Ctrl+E', group: 'Exportar', run: () => void exportParts('3mf') },
   { id: 'export-stl', label: 'Exportar todas as partes em STL (.zip)', group: 'Exportar', run: () => void exportParts('stl-zip') },
   { id: 'export-obj', label: 'Exportar todas as partes em OBJ (.zip)', group: 'Exportar', run: () => void exportParts('obj-zip') },
+  { id: 'guide', label: 'Guia de montagem (HTML com imagens)', group: 'Exportar', run: () => void exportAssemblyGuide() },
+  {
+    id: 'autosplit',
+    label: 'Dividir parte selecionada para caber na mesa',
+    group: 'Ferramentas',
+    run: () => {
+      const { selection, parts } = useUI.getState();
+      const id = selection ?? (parts.length === 1 ? parts[0].id : null);
+      if (id) void autoSplitPart(id);
+      else toast('info', 'Selecione uma parte primeiro');
+    },
+  },
   { id: 'cut', label: 'Corte por plano', shortcut: 'C', group: 'Ferramentas', run: () => startCut() },
   { id: 'select', label: 'Selecionar', shortcut: 'V', group: 'Ferramentas', run: () => setUI({ tool: 'select' }) },
   { id: 'smartcut', label: 'SmartCut — pincelar região e sugerir corte', shortcut: 'S', group: 'Ferramentas', run: () => startBrush() },
