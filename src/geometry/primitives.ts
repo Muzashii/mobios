@@ -17,9 +17,9 @@ export function exampleFigure(wasm: Wasm): Manifold {
   const pieces: Manifold[] = [
     // Base
     wasm.Manifold.cylinder(6, 34, 32, 96).translate([0, 0, 0]),
-    // Legs
-    limb(wasm, [-9, 0, 6], [-8, 0, 40], 7, 8),
-    limb(wasm, [9, 0, 6], [8, 0, 40], 7, 8),
+    // Legs (feet rounded inside the base: the figure stands flat on the plate)
+    limb(wasm, [-9, 0, 8], [-8, 0, 40], 7, 8),
+    limb(wasm, [9, 0, 8], [8, 0, 40], 7, 8),
     // Torso and hips
     limb(wasm, [0, 0, 44], [0, 0, 72], 15, 17),
     // Neck and head

@@ -108,7 +108,12 @@ export function PrintPrep({ part, fits }: { part: ViewPart; fits: boolean }) {
           <>
             <p className="text-[11px] text-muted">Como está agora:</p>
             <ReportView r={report} />
-            {orient && (
+            {orient && orient.down[2] === -1 && !meta.down && (
+              <p className="flex items-center gap-1.5 text-[11px] text-success">
+                <IconCheck size={13} /> Já está na melhor orientação para imprimir.
+              </p>
+            )}
+            {orient && (orient.down[2] !== -1 || meta.down) && (
               <div className="space-y-1.5">
                 <p className="text-[11px] leading-snug">
                   Melhor: <strong>{orient.label}</strong> — balanço {orient.report.overhangPct.toFixed(0)}% (agora {orient.current.overhangPct.toFixed(0)}%).

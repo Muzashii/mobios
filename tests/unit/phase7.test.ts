@@ -78,6 +78,13 @@ describe('printability', () => {
     [block, stem, bar, t].forEach((m) => m.delete());
   });
 
+  it('the example figure stands flat on its base (regression: feet poked through)', () => {
+    const fig = exampleFigure(wasm);
+    const r = analyzePrintability(fig, 'FDM');
+    expect(r.baseArea).toBeGreaterThan(Math.PI * 32 * 32 * 0.95);
+    fig.delete();
+  });
+
   it('flags thin walls', () => {
     const plate = wasm.Manifold.cube([40, 40, 0.4]);
     expect(analyzePrintability(plate, 'FDM').thinPct).toBeGreaterThan(80);
