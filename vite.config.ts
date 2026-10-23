@@ -4,7 +4,11 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// Served from a sub-path on GitHub Pages (BASE_PATH=/mobios/); '/' everywhere else.
+const base = process.env.BASE_PATH ?? '/';
+
 export default defineConfig({
+  base,
   plugins: [
     react(),
     tailwindcss(),
@@ -17,8 +21,8 @@ export default defineConfig({
         short_name: 'Mobios',
         description: 'Corte modelos 3D em partes imprimíveis com encaixes — direto no navegador, também offline.',
         lang: 'pt-BR',
-        start_url: '/',
-        scope: '/',
+        start_url: base,
+        scope: base,
         display: 'standalone',
         theme_color: '#121316',
         background_color: '#0e0f12',
@@ -31,7 +35,7 @@ export default defineConfig({
         // Installed app opens models straight from the file manager.
         file_handlers: [
           {
-            action: '/',
+            action: base,
             accept: {
               'model/stl': ['.stl'],
               'model/obj': ['.obj'],
@@ -45,7 +49,7 @@ export default defineConfig({
         // Everything, including the geometry WASM, is precached: the app works offline.
         globPatterns: ['**/*.{js,css,html,wasm,woff2,png,svg,txt}'],
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
-        navigateFallback: '/index.html',
+        navigateFallback: `${base}index.html`,
       },
     }),
   ],

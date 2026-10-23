@@ -4,7 +4,15 @@ Corte modelos 3D em partes imprimíveis, gere encaixes que encaixam na primeira 
 
 Especificação: [docs/SPEC.md](docs/SPEC.md) · Decisões: [docs/ADR](docs/ADR) · Regras para agentes: [CLAUDE.md](CLAUDE.md)
 
-## Rodar
+## Usar
+
+**Abra https://muzashii.github.io/mobios/** — não precisa instalar nada.
+
+Para ter como aplicativo: no Chrome ou no Edge, clique no ícone **Instalar** na barra de endereço. O Mobios ganha atalho no menu Iniciar, abre em janela própria, **funciona offline** e passa a abrir arquivos `.stl`, `.3mf` e `.mobios` direto do Explorador. Ele se atualiza sozinho a cada nova versão publicada.
+
+O site é recompilado e publicado automaticamente a cada push na `master` (`.github/workflows/pages.yml`).
+
+## Desenvolver
 
 ```bash
 npm install
