@@ -105,6 +105,7 @@ export function selfIntersections(p: Float32Array, t: Uint32Array, opts: { maxPa
   };
   const seen = new Set<number>();
   const faces = new Set<number>();
+  const hitPairs: number[] = [];
   let pairs = 0, complete = true, tested = 0;
   const eps = size * 1e-9;
   outer: for (const list of buckets.values()) {
@@ -123,11 +124,12 @@ export function selfIntersections(p: Float32Array, t: Uint32Array, opts: { maxPa
         if (trianglesIntersect(A, B, eps)) {
           faces.add(f);
           faces.add(g);
+          hitPairs.push(f, g);
           if (++pairs >= maxPairs) { complete = false; break outer; }
         }
         if ((++tested & 4095) === 0 && performance.now() - t0 > budget) { complete = false; break outer; }
       }
     }
   }
-  return { pairs, faces: [...faces], complete };
+  return { pairs, faces: [...faces], pairList: hitPairs, complete };
 }

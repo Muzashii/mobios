@@ -85,7 +85,7 @@ function surfaceDistance(vp: Float32Array, tv: Uint32Array, np: number, p: Vec3)
 function contains(mesh: { vertProperties: Float32Array; triVerts: Uint32Array; numProp: number }, p: Vec3) {
   const { vertProperties: v, triVerts: t, numProp: np } = mesh;
   // Slightly irrational direction avoids hitting edges exactly.
-  const d: Vec3 = normalize([0.5773, 0.5774, 0.5775 + 1e-3]);
+  const d: Vec3 = normalize([0.3123, 0.5234, 0.7929]);
   let hits = 0;
   for (let f = 0; f < t.length; f += 3) {
     const a = t[f] * np, b = t[f + 1] * np, c = t[f + 2] * np;

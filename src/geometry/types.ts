@@ -268,3 +268,81 @@ export interface ExportPart {
 }
 
 export type ExportFormat = 'stl-zip' | '3mf' | 'obj-zip';
+
+// ---------------------------------------------------------------------------
+// Raio-X da malha (mesh inspection on import) — see docs/ADR/0009.
+
+export type IssueKind =
+  | 'holes'
+  | 'non-manifold'
+  | 'orientation'
+  | 'self-intersections'
+  | 'shells'
+  | 'inner-shells'
+  | 'degenerate'
+  | 'thin-walls'
+  | 'scale'
+  | 'huge'
+  | 'needles'
+  | 'genus'
+  | 'fit';
+
+export type IssueSeverity = 'info' | 'warning' | 'critical';
+
+/** Heatmap overlay of an issue: edge segments, triangles or points (world, mm). */
+export interface IssueMarkers {
+  type: 'edges' | 'faces' | 'points';
+  positions: Float32Array;
+}
+
+export interface RepairChoice {
+  value: string;
+  label: string;
+  hint?: string;
+}
+
+export interface MeshIssue {
+  kind: IssueKind;
+  severity: IssueSeverity;
+  title: string;
+  detail: string;
+  count: number;
+  /** Repair options (first = recommended); empty when the issue is information only. */
+  options: RepairChoice[];
+  /** Region to frame with "Mostrar". */
+  focus?: Bounds;
+  markers?: IssueMarkers;
+}
+
+export interface InspectionReport {
+  /** Pending import id (worker keeps the raw mesh until the user decides). */
+  id: string;
+  name: string;
+  grade: 'ok' | 'repair' | 'critical';
+  triangles: number;
+  vertices: number;
+  size: Vec3;
+  bounds: Bounds;
+  shells: number;
+  /** Signed volume when the mesh is closed (mm³). */
+  volume: number | null;
+  issues: MeshIssue[];
+  ms: number;
+  /** Render mesh of the raw file (shown under the heatmap). */
+  preview: DisplayMesh;
+}
+
+/** User's choice per issue kind (values from `MeshIssue.options`). */
+export type RepairPlan = Partial<Record<IssueKind, string>> & {
+  /** Debris threshold (mm³) when `shells` removes small floating pieces. */
+  debrisVolume?: number;
+  /** Voxels along the longest side for the volumetric remesh. */
+  volumetricResolution?: number;
+};
+
+export interface RepairOutcome {
+  /** One entry per resulting source (several when shells are kept as separate parts). */
+  meshes: ImportedMesh[];
+  /** Human summary ("12 furos fechados · …"). */
+  summary: string;
+}
