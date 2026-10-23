@@ -11,11 +11,12 @@ npm install
 npm run dev          # http://localhost:5173
 npm run test         # unidade + propriedade (fast-check)
 npm run bench        # orçamento de desempenho (500k triângulos)
-npm run build        # typecheck + build de produção
+npm run build        # typecheck + build de produção (com service worker)
+npm run lighthouse   # com `npx vite preview --port 4173` rodando
 npx playwright install chromium && npm run e2e   # E2E com screenshot
 ```
 
-## O que já faz (Fases 0–7)
+## O que já faz (Fases 0–8)
 
 | Área | Recursos |
 |---|---|
@@ -30,7 +31,8 @@ npx playwright install chromium && npm run e2e   # E2E com screenshot
 | Preparação | **Auto-split**: divide a peça com o menor número de cortes para caber na impressora, nas seções mais estreitas, com pinos soltos e numeração; **análise de impressão** (balanços > 45°, base, paredes finas); **orientação sugerida** aplicada na exportação; **oco para resina** com drenos e aviso de ventosa |
 | Análise | Dimensões, volume, material estimado, cabe na impressora (Bambu A1/A1 mini/X1, Mars 5 Ultra), área de colagem |
 | Exportar | 3MF com um objeto por parte e slot de filamento (Bambu Studio), STL/OBJ em ZIP (pinos soltos empacotados, orientação aplicada), projeto `.fenda`, **guia de montagem HTML** com imagens de cada passo |
-| Projeto | Autosave no IndexedDB, abrir/salvar `.fenda`, tema claro/escuro, paleta de comandos (Ctrl+K) |
+| Projeto | Autosave no IndexedDB, abrir/salvar `.fenda`, tema claro/escuro, paleta de comandos (Ctrl+K), **tour de primeiros passos**, **PWA instalável e offline** (abre .stl/.3mf direto do sistema) |
+| Acessibilidade | Navegação por teclado, link para pular ao painel, contraste AA nos dois temas, respeita "reduzir movimento" |
 
 ## Atalhos
 
@@ -46,8 +48,8 @@ UI (React 19 + R3F)  ──commands──▶  Store (Zustand, documento imutáve
                                └ manifold-3d (WASM): corte, booleanos, reparo
 ```
 
-Toda geometria roda no worker via manifold-3d — toda parte exportada é fechada (manifold). Ver ADRs 0001–0006.
+Toda geometria roda no worker via manifold-3d — toda parte exportada é fechada (manifold). Ver ADRs 0001–0007.
 
 ## Desempenho medido
 
-`npm run bench` (Windows, Node 24): corte oblíquo de 500k triângulos ≈ 830 ms (meta da SPEC: 500 ms — ver [ADR 0003](docs/ADR/0003-orcamento-de-desempenho.md)); bundle inicial 291 KB gzip (viewport e WASM carregam sob demanda).
+`npm run bench` (Windows, Node 24): corte oblíquo de 500k triângulos ≈ 830 ms (meta da SPEC: 500 ms — ver [ADR 0003](docs/ADR/0003-orcamento-de-desempenho.md)); bundle inicial 180 KB gzip (three.js, viewport e WASM carregam sob demanda). Lighthouse: desktop 100/100/100/100, celular 93/100/100/100 (desempenho/acessibilidade/boas práticas/SEO) — [ADR 0007](docs/ADR/0007-polimento-pwa-e-lighthouse.md).

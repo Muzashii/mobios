@@ -3,7 +3,7 @@ import { Plane, Raycaster, Vector2, Vector3 } from 'three';
 import { smoothStroke } from '../../geometry/cutters';
 import type { StrokeFrame, Vec2, Vec3 } from '../../geometry/types';
 import { useUI } from '../../store/ui';
-import { finishStroke, partBox } from './cutActions';
+import { finishStroke, partBounds } from './cutActions';
 import { viewportRefs } from '../viewport/viewportRefs';
 
 /**
@@ -11,7 +11,7 @@ import { viewportRefs } from '../viewport/viewportRefs';
  * projected onto a view-aligned plane through the part and later extruded along the
  * view direction into a cutting surface (the left side of the stroke becomes B).
  */
-export function StrokeOverlay() {
+export default function StrokeOverlay() {
   const active = useUI((s) => s.tool === 'draw');
   const [pts, setPts] = useState<[number, number][]>([]);
   const drawing = useRef(false);
@@ -25,9 +25,9 @@ export function StrokeOverlay() {
   const finish = (screen: [number, number][]) => {
     const { camera, canvas } = viewportRefs;
     const target = useUI.getState().selection;
-    const box = target ? partBox(target) : null;
+    const box = target ? partBounds(target) : null;
     if (!camera || !canvas || !box || screen.length < 2) return;
-    const c = box.getCenter(new Vector3());
+    const c = new Vector3(...box.center);
     const n = camera.getWorldDirection(new Vector3()).negate();
     const u = new Vector3(1, 0, 0).applyQuaternion(camera.quaternion).normalize();
     const v = n.clone().cross(u).normalize();
@@ -48,8 +48,7 @@ export function StrokeOverlay() {
       v: v.toArray() as Vec3,
       n: n.toArray() as Vec3,
     };
-    const size = box.getSize(new Vector3()).length();
-    finishStroke(frame, smoothStroke(out, 2, size / 200));
+    finishStroke(frame, smoothStroke(out, 2, box.diag / 200));
   };
 
   return (

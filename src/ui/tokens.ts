@@ -30,7 +30,7 @@ export const tokens = {
     line: '#DEDBD4',
     text: '#17181B',
     muted: '#5E616B',
-    accent: '#E85512',
+    accent: '#C2410C',
     accentText: '#FFFFFF',
     danger: '#D93036',
     warning: '#B7791F',

@@ -1,4 +1,4 @@
-import { BufferAttribute, BufferGeometry } from 'three';
+import type { BufferGeometry } from 'three';
 import { geometry } from '../geometry/client';
 import type { DisplayMesh, OpReport } from '../geometry/types';
 import { autoPartColor } from '../ui/tokens';
@@ -6,7 +6,12 @@ import { useHistory } from './history';
 import { saveDocSoon } from './persistence';
 import { toast, useUI, type ViewPart } from './ui';
 
-export function toBufferGeometry(mesh: DisplayMesh): BufferGeometry {
+// three.js is loaded on demand: the app shell paints before the 3D engine arrives.
+let three: Promise<typeof import('three')> | null = null;
+const loadThree = () => (three ??= import('three'));
+
+export async function toBufferGeometry(mesh: DisplayMesh): Promise<BufferGeometry> {
+  const { BufferAttribute, BufferGeometry } = await loadThree();
   const g = new BufferGeometry();
   g.setAttribute('position', new BufferAttribute(mesh.positions, 3));
   g.setAttribute('normal', new BufferAttribute(mesh.normals, 3));
@@ -47,7 +52,7 @@ async function run() {
       pendingFull = false;
       const { doc } = useHistory.getState();
       const result = await geometry().evaluate(doc.sources, doc.operations, full);
-      apply(result.parts, result.reports, result.ms);
+      await apply(result.parts, result.reports, result.ms);
       useUI.setState({ joints: result.joints });
     } while (pending);
   } catch (e) {
@@ -59,7 +64,10 @@ async function run() {
   }
 }
 
-function apply(results: Awaited<ReturnType<ReturnType<typeof geometry>['evaluate']>>['parts'], reports: Record<string, OpReport>, ms: number) {
+async function apply(results: Awaited<ReturnType<ReturnType<typeof geometry>['evaluate']>>['parts'], reports: Record<string, OpReport>, ms: number) {
+  // Build GPU geometries first (async: three.js may still be loading), then read state.
+  const built = new Map<string, BufferGeometry>();
+  for (const r of results) if (r.mesh) built.set(r.id, await toBufferGeometry(r.mesh));
   const prev = useUI.getState();
   const byId = new Map(prev.parts.map((p) => [p.id, p]));
   const next: ViewPart[] = [];
@@ -67,7 +75,7 @@ function apply(results: Awaited<ReturnType<ReturnType<typeof geometry>['evaluate
     const old = byId.get(r.id);
     let geometryObj = old?.geometry;
     if (r.mesh) {
-      geometryObj = toBufferGeometry(r.mesh);
+      geometryObj = built.get(r.id)!;
       if (old) old.geometry.dispose();
     } else if (!old) {
       return; // should not happen: worker always sends unknown versions

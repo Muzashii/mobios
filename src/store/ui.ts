@@ -91,6 +91,8 @@ interface UIState {
   paletteOpen: boolean;
   /** Filament slot applied by the paint tool. */
   activeSlot: number;
+  /** Set after the first successful export (onboarding step 4). */
+  exportedOnce: boolean;
   /** Bumped to ask the viewport to frame something. */
   focusRequest: { id: PartId | 'all'; n: number };
   ready: boolean;
@@ -123,6 +125,7 @@ export const useUI = create<UIState>(() => ({
   showBed: true,
   paletteOpen: false,
   activeSlot: 2,
+  exportedOnce: false,
   focusRequest: { id: 'all', n: 0 },
   ready: false,
 }));

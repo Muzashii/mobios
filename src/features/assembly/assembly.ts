@@ -34,10 +34,3 @@ export function assemblyOffsets(parts: ViewPart[], joints: JointInfo[], progress
   }
   return out;
 }
-
-/** Index of the joint currently closing, for the overlay caption. */
-export function activeJoint(joints: JointInfo[], progress: number): JointInfo | null {
-  if (!joints.length || progress >= 1) return null;
-  const order = [...joints].reverse();
-  return order[Math.min(order.length - 1, Math.floor(progress * order.length))];
-}

@@ -6,7 +6,8 @@ import type { Vec3 } from '../../geometry/types';
 import { BackSide, DoubleSide, Plane as ThreePlane, Vector3, type Matrix4 } from 'three';
 import { useUI, type CutDraft } from '../../store/ui';
 import { ACCENT, CUT_A, CUT_B } from '../../ui/tokens';
-import { planeFromMatrix, planeMatrix, updateDraft } from '../cut/cutActions';
+import { updateDraft } from '../cut/cutActions';
+import { planeFromMatrix, planeMatrix } from './planeMatrix';
 
 /**
  * Live "ghost" preview of a cut: the target is clipped on the GPU into both sides

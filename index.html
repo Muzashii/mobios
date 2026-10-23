@@ -4,12 +4,22 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#121316" />
-    <meta name="description" content="Fenda Studio — corte modelos 3D em partes imprimíveis com encaixes." />
+    <meta name="description" content="Fenda Studio — corte modelos 3D em partes imprimíveis com encaixes, SmartCut e exportação para Bambu Studio. Funciona offline no navegador." />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <title>Fenda Studio</title>
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <title>Fenda Studio — cortes e encaixes para impressão 3D</title>
+    <style>
+      /* Painted before any JS: matches the app shell, so first paint is instant and stable. */
+      html, body { height: 100%; margin: 0; background: #0e0f12; color: #ecedef; font: 13px system-ui, sans-serif; }
+      #boot { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
+      #boot b { font-size: 18px; letter-spacing: -0.01em; }
+      #boot span { color: #9a9da6; }
+      #root:not(:empty) + #boot { display: none; }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <div id="boot" aria-hidden="true"><b>Fenda Studio</b><span>Carregando a oficina…</span></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

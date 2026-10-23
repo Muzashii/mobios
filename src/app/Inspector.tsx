@@ -18,7 +18,7 @@ export function Inspector() {
 
   const key = brushing ? 'smartcut' : draft ? `cut-${draft.editingOpId ?? 'new'}` : connectorEdit ? `k-${connectorEdit}` : part ? `part-${part.id}` : 'project';
   return (
-    <aside aria-label="Inspector" className="relative h-full overflow-hidden border-l border-line bg-surface">
+    <aside id="inspector" tabIndex={-1} aria-label="Inspector" className="relative h-full overflow-hidden border-l border-line bg-surface">
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
           key={key}

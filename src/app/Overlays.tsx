@@ -6,7 +6,7 @@ import { setUI, useUI } from '../store/ui';
 import { Button, Kbd, Slider, cx } from '../ui/components';
 import { IconAlert, IconCheck, IconCube, IconCut, IconExport, IconInfo, IconOpen, IconPin, IconX } from '../ui/icons';
 import { contrast } from '../features/paint/SlotPicker';
-import { activeJoint } from '../features/assembly/assembly';
+import { activeJoint } from '../features/assembly/order';
 import { IconPause, IconPlay } from '../ui/icons';
 import { APP_COMMANDS, toggleAssembly } from './commands';
 
@@ -163,7 +163,7 @@ export function EmptyState() {
         <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-accent-soft text-accent">
           <IconCube size={24} />
         </div>
-        <h1 className="text-lg font-semibold">Arraste um STL, OBJ ou 3MF aqui</h1>
+        <h2 className="text-lg font-semibold">Arraste um STL, OBJ ou 3MF aqui</h2>
         <p className="mt-1 text-sm text-muted">ou abra um exemplo para experimentar o fluxo completo.</p>
         <div className="mt-5 flex justify-center gap-2">
           <Button variant="primary" onClick={() => void openFilePicker()} data-testid="open-file">
@@ -262,7 +262,7 @@ export function Toasts() {
                 <div className="text-xs font-medium">{t.title}</div>
                 {t.detail && <div className="mt-0.5 text-[11px] leading-snug text-muted">{t.detail}</div>}
               </div>
-              <button aria-label="Fechar" className="self-start text-muted hover:text-text" onClick={() => setUI({ toasts: useUI.getState().toasts.filter((x) => x.id !== t.id) })}>
+              <button aria-label="Fechar aviso" className="-m-1 flex h-6 w-6 items-center justify-center self-start rounded text-muted hover:text-text" onClick={() => setUI({ toasts: useUI.getState().toasts.filter((x) => x.id !== t.id) })}>
                 <IconX size={14} />
               </button>
             </motion.div>

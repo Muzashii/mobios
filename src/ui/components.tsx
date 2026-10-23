@@ -80,7 +80,7 @@ export function Section({ title, children, aside }: { title: string; children: R
   return (
     <section className="border-b border-line px-4 py-3 last:border-b-0">
       <header className="mb-2.5 flex items-center justify-between">
-        <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">{title}</h3>
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">{title}</h2>
         {aside}
       </header>
       <div className="space-y-2.5">{children}</div>

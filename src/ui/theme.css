@@ -30,9 +30,9 @@
   --line: #dedbd4;
   --text: #17181b;
   --muted: #5e616b;
-  --accent: #e85512;
+  --accent: #c2410c;
   --accent-text: #ffffff;
-  --accent-soft: rgb(232 85 18 / 0.12);
+  --accent-soft: rgb(194 65 12 / 0.12);
   --danger: #d93036;
   --warning: #b7791f;
   --success: #1e9e62;
@@ -83,6 +83,34 @@ body {
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: fixed;
+  left: 12px;
+  top: -48px;
+  z-index: 100;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+  transition: top 0.15s;
+}
+.skip-link:focus {
+  top: 12px;
 }
 
 .num {

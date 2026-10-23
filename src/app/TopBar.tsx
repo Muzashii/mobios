@@ -37,8 +37,9 @@ export function TopBar() {
         <span className="flex h-7 w-7 items-center justify-center rounded-md bg-accent text-accent-text">
           <IconLogo size={16} />
         </span>
-        <span className="text-sm font-semibold tracking-tight">Fenda</span>
-        <span className="hidden text-sm text-muted sm:inline">Studio</span>
+        <h1 className="text-sm font-semibold tracking-tight">
+          Fenda <span className="hidden font-normal text-muted sm:inline">Studio</span>
+        </h1>
       </div>
 
       <Menu.Root>

@@ -1,4 +1,3 @@
-import { Box3, Matrix4, Quaternion, Vector3 } from 'three';
 import { geometry } from '../../geometry/client';
 import { defaultConnectorParams } from '../../geometry/connectors';
 import type { CutOperation, CutProfile, Operation, PartId, Plane, StrokeFrame, Vec2, Vec3 } from '../../geometry/types';
@@ -8,26 +7,14 @@ import { newId } from '../../store/project';
 import { toBufferGeometry } from '../../store/sync';
 import { setUI, toast, useUI, type CutDraft } from '../../store/ui';
 
-const Z = new Vector3(0, 0, 1);
-
-/** Gizmo matrix for a plane (rotation that maps +Z onto the normal). */
-export function planeMatrix(plane: Plane): Matrix4 {
-  const q = new Quaternion().setFromUnitVectors(Z, new Vector3(...plane.normal).normalize());
-  return new Matrix4().compose(new Vector3(...plane.origin), q, new Vector3(1, 1, 1));
-}
-
-export function planeFromMatrix(m: Matrix4): Plane {
-  const pos = new Vector3(), q = new Quaternion(), s = new Vector3();
-  m.decompose(pos, q, s);
-  const n = Z.clone().applyQuaternion(q).normalize();
-  return { origin: pos.toArray() as Vec3, normal: n.toArray() as Vec3 };
-}
-
-export function partBox(id: PartId): Box3 | null {
+/** Bounding box of a part (plain numbers: keeps three.js out of the initial bundle). */
+export function partBounds(id: PartId): { center: Vec3; size: Vec3; diag: number } | null {
   const part = useUI.getState().parts.find((p) => p.id === id);
   if (!part) return null;
   part.geometry.computeBoundingBox();
-  return part.geometry.boundingBox!.clone();
+  const { min, max } = part.geometry.boundingBox!;
+  const size: Vec3 = [max.x - min.x, max.y - min.y, max.z - min.z];
+  return { center: [(min.x + max.x) / 2, (min.y + max.y) / 2, (min.z + max.z) / 2], size, diag: Math.hypot(...size) };
 }
 
 function connectorDefaults() {
@@ -71,11 +58,9 @@ function baseDraft(target: PartId, plane: Plane, radius: number): CutDraft {
 export function startCut(partId?: PartId) {
   const id = resolveTarget(partId);
   if (!id) return;
-  const box = partBox(id);
+  const box = partBounds(id);
   if (!box) return;
-  const center = box.getCenter(new Vector3());
-  const size = box.getSize(new Vector3());
-  const draft = baseDraft(id, { origin: center.toArray() as Vec3, normal: [0, 0, 1] }, Math.max(size.x, size.y, size.z) * 0.3);
+  const draft = baseDraft(id, { origin: box.center, normal: [0, 0, 1] }, Math.max(...box.size) * 0.3);
   setUI({ tool: 'cut', draft, selection: id, connectorEdit: null });
 }
 
@@ -128,8 +113,8 @@ export function startDraw(partId?: PartId) {
 export function finishStroke(frame: StrokeFrame, points: Vec2[]) {
   const { selection } = useUI.getState();
   if (!selection || points.length < 2) return;
-  const box = partBox(selection);
-  const draft = baseDraft(selection, { origin: frame.origin, normal: frame.u }, box ? box.getSize(new Vector3()).length() * 0.3 : 30);
+  const box = partBounds(selection);
+  const draft = baseDraft(selection, { origin: frame.origin, normal: frame.u }, box ? box.diag * 0.3 : 30);
   draft.mode = 'surface';
   draft.surface = { frame, points, flip: false };
   draft.connector = { ...draft.connector, enabled: false };
@@ -147,10 +132,10 @@ export async function editCut(opId: string) {
     toast('error', 'Não foi possível editar este corte', 'A parte original não existe mais.');
     return;
   }
-  const previewGeometry = toBufferGeometry(mesh);
-  const size = previewGeometry.boundingBox!.getSize(new Vector3());
+  const previewGeometry = await toBufferGeometry(mesh);
+  const { min, max } = previewGeometry.boundingBox!;
   useUI.getState().draft?.previewGeometry?.dispose();
-  const draft = baseDraft(op.target, op.kind === 'cut-plane' ? op.plane : { origin: op.frame.origin, normal: op.frame.u }, Math.max(size.x, size.y, size.z) * 0.3);
+  const draft = baseDraft(op.target, op.kind === 'cut-plane' ? op.plane : { origin: op.frame.origin, normal: op.frame.u }, Math.max(max.x - min.x, max.y - min.y, max.z - min.z) * 0.3);
   draft.editingOpId = opId;
   draft.previewGeometry = previewGeometry;
   draft.connectorOpId = connector?.id;
@@ -261,10 +246,10 @@ export function flipNormal() {
 /** Offset of the plane along its normal relative to the target's centre. */
 export function draftOffsetRange(draft: CutDraft) {
   const g = draft.previewGeometry ?? useUI.getState().parts.find((p) => p.id === draft.target)?.geometry;
-  if (!g) return { min: -50, max: 50, center: new Vector3() };
+  if (!g) return { min: -50, max: 50, center: [0, 0, 0] as Vec3 };
   g.computeBoundingSphere();
   const s = g.boundingSphere!;
-  return { min: -s.radius, max: s.radius, center: s.center.clone() };
+  return { min: -s.radius, max: s.radius, center: [s.center.x, s.center.y, s.center.z] as Vec3 };
 }
 
 export function editConnector(opId: string) {

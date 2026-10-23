@@ -35,6 +35,7 @@ export async function exportParts(format: ExportFormat) {
     );
     const suffix = format === 'obj-zip' ? '-obj' : '';
     downloadBytes(data, `${safeFileName(doc.name)}${suffix}.${LABEL[format].ext}`);
+    setUI({ exportedOnce: true });
     toast('success', `${parts.length} parte(s) exportada(s) em ${LABEL[format].name}`);
   } catch (e) {
     toast('error', 'Falha ao exportar', e instanceof Error ? e.message : String(e));

@@ -1,4 +1,4 @@
-import { Vector3 } from 'three';
+import { add, dot, scale, sub } from '../../geometry/math';
 import type { CutProfile, Vec3 } from '../../geometry/types';
 import { useUI, type CutDraft } from '../../store/ui';
 import { Button, Field, Kbd, NumberInput, Section, Segmented, Slider, Switch } from '../../ui/components';
@@ -102,17 +102,15 @@ export function CutInspector({ draft }: { draft: CutDraft }) {
 function PlaneCutInspector({ draft }: { draft: CutDraft }) {
   const part = useUI((s) => s.parts.find((p) => p.id === draft.target));
   const range = draftOffsetRange(draft);
-  const n = new Vector3(...draft.plane.normal);
-  const offset = new Vector3(...draft.plane.origin).sub(range.center).dot(n);
+  const n = draft.plane.normal;
+  const offset = dot(sub(draft.plane.origin, range.center), n);
   const { tilt, heading } = anglesOf(draft.plane.normal);
   const profiled = !!draft.profile && draft.profile.amplitude > 0;
   const allowsConnector = draftAllowsConnector(draft);
 
   const setOffset = (v: number) => {
     // Move along the normal, keeping the in-plane position.
-    const o = new Vector3(...draft.plane.origin);
-    const delta = v - offset;
-    updateDraft({ plane: { ...draft.plane, origin: o.addScaledVector(n, delta).toArray() as Vec3 } });
+    updateDraft({ plane: { ...draft.plane, origin: add(draft.plane.origin, scale(n, v - offset)) } });
   };
   const setOrigin = (axis: number, v: number) => {
     const origin = [...draft.plane.origin] as Vec3;
