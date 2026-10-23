@@ -1,0 +1,77 @@
+import { useFrame } from '@react-three/fiber';
+import { useMemo, useRef } from 'react';
+import { Color, type Mesh, type MeshStandardMaterial, type Vector3 } from 'three';
+import { setPartMeta } from '../../store/commands';
+import { dispatch, useHistory } from '../../store/history';
+import { focus, setUI, useUI, type ViewPart } from '../../store/ui';
+import { ACCENT } from '../../ui/tokens';
+import { partColor } from '../paint/colors';
+
+const accent = new Color(ACCENT);
+
+function PartMesh({ part, offset, color, selected, hovered, interactive }: { part: ViewPart; offset: Vector3; color: string; selected: boolean; hovered: boolean; interactive: boolean }) {
+  const mesh = useRef<Mesh>(null);
+  const mat = useRef<MeshStandardMaterial>(null);
+  const busy = useUI((s) => s.busy);
+
+  useFrame(({ clock }) => {
+    if (!mat.current) return;
+    const base = selected ? 0.22 : hovered ? 0.12 : 0;
+    // Non-blocking progress: parts breathe softly while the worker computes.
+    const pulse = busy ? 0.06 + 0.06 * Math.sin(clock.elapsedTime * 6) : 0;
+    mat.current.emissiveIntensity = base + pulse;
+  });
+
+  return (
+    <mesh
+      ref={mesh}
+      geometry={part.geometry}
+      position={offset}
+      castShadow
+      receiveShadow
+      onPointerOver={interactive ? (e) => (e.stopPropagation(), setUI({ hovered: part.id })) : undefined}
+      onPointerOut={interactive ? () => useUI.getState().hovered === part.id && setUI({ hovered: null }) : undefined}
+      onClick={
+        interactive
+          ? (e) => {
+              e.stopPropagation();
+              const { tool } = useUI.getState();
+              if (tool === 'paint') {
+                const slot = useUI.getState().activeSlot;
+                dispatch(setPartMeta(part.id, { slot }, `Pintar ${part.name}`));
+                return;
+              }
+              setUI({ selection: part.id, connectorEdit: null });
+            }
+          : undefined
+      }
+      onDoubleClick={interactive ? (e) => (e.stopPropagation(), focus(part.id)) : undefined}
+    >
+      <meshStandardMaterial ref={mat} color={color} roughness={0.58} metalness={0.04} emissive={accent} emissiveIntensity={0} />
+    </mesh>
+  );
+}
+
+export function Parts({ offsets, hiddenId }: { offsets: Map<string, Vector3>; hiddenId?: string }) {
+  const parts = useUI((s) => s.parts);
+  const selection = useUI((s) => s.selection);
+  const hovered = useUI((s) => s.hovered);
+  const drafting = useUI((s) => !!s.draft);
+  const doc = useHistory((s) => s.doc);
+  const visible = useMemo(() => parts.filter((p) => doc.partMeta[p.id]?.visible !== false && p.id !== hiddenId), [parts, doc.partMeta, hiddenId]);
+  return (
+    <group>
+      {visible.map((p) => (
+        <PartMesh
+          key={p.id}
+          part={p}
+          offset={offsets.get(p.id)!}
+          color={partColor(doc, p)}
+          selected={selection === p.id}
+          hovered={hovered === p.id}
+          interactive={!drafting && !doc.partMeta[p.id]?.locked}
+        />
+      ))}
+    </group>
+  );
+}
