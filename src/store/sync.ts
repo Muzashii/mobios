@@ -3,6 +3,7 @@ import { geometry } from '../geometry/client';
 import type { DisplayMesh, OpReport } from '../geometry/types';
 import { autoPartColor } from '../ui/tokens';
 import { useHistory } from './history';
+import { ensurePartMaps } from './partmaps';
 import { saveDocSoon } from './persistence';
 import { toast, useUI, type ViewPart } from './ui';
 
@@ -54,6 +55,7 @@ async function run() {
       const result = await geometry().evaluate(doc.sources, doc.operations, full);
       await apply(result.parts, result.reports, result.ms);
       useUI.setState({ joints: result.joints });
+      ensurePartMaps();
     } while (pending);
   } catch (e) {
     toast('error', 'Falha no motor geométrico', e instanceof Error ? e.message : String(e));
@@ -117,5 +119,6 @@ export function startSync() {
     if (s.doc === prev.doc) return;
     saveDocSoon(s.doc);
     if (s.doc.sources !== prev.doc.sources || s.doc.operations !== prev.doc.operations) requestEvaluate();
+    else if (s.doc.partMaps !== prev.doc.partMaps) ensurePartMaps();
   });
 }

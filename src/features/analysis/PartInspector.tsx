@@ -7,6 +7,7 @@ import { Button, Field, Kbd, Section, mm } from '../../ui/components';
 import { IconAlert, IconCheck, IconCut, IconEye, IconEyeOff, IconFocus, IconTrash } from '../../ui/icons';
 import { startBrush, startCut } from '../cut/cutActions';
 import { SlotPicker } from '../paint/SlotPicker';
+import { PartMapPanel } from '../parts/PartMapPanel';
 import { PrintPrep } from './PrintPrep';
 
 export function fitsPrinter(size: number[], volume: number[]) {
@@ -73,6 +74,8 @@ export function PartInspector({ part }: { part: ViewPart }) {
           )}
         </div>
       </Section>
+
+      <PartMapPanel part={part} />
 
       <Section title="Medidas">
         <div className="grid grid-cols-2 gap-1.5">

@@ -7,12 +7,13 @@ import { writeSTL } from '../io/stl';
 import { write3MF } from '../io/threemf';
 import { calibrationPieces, exampleFigure } from './primitives';
 import { clusterSeeds, regionContext, suggestRegion } from './smartcut';
+import { partMapOf } from './partmap';
 import { planAutoSplit, type AutoSplitPlan } from './autosplit';
 import { analyzePrintability, suggestOrientation, type OrientationSuggestion } from './printability';
 import { toDisplayMesh } from './display';
 import { Engine } from './engine';
 import { manifoldToMeshData, meshDataToManifold, repairMesh } from './repair';
-import type { InspectionReport, RepairOutcome, RepairPlan, CutCheck, CutOperation, DisplayMesh, SmartCutSuggestion, Vec3, EvalResult, ExportFormat, ExportPart, ImportedMesh, MeshData, Operation, SourceRef, Technology } from './types';
+import type { PartMapResult, InspectionReport, RepairOutcome, RepairPlan, CutCheck, CutOperation, DisplayMesh, SmartCutSuggestion, Vec3, EvalResult, ExportFormat, ExportPart, ImportedMesh, MeshData, Operation, SourceRef, Technology } from './types';
 import type { Wasm } from './wasm';
 
 /** Rotates a mesh so `down` points to −Z and rests it on z = 0 (print orientation). */
@@ -184,6 +185,24 @@ export class GeometryService {
     } catch {
       return null;
     }
+  }
+
+  private partMaps = new Map<Manifold, PartMapResult>();
+
+  /**
+   * Automatic part map of a part (hat, head, torso, arms…): segmented on an analysis proxy of
+   * at most ~60k triangles, then carried to every triangle of the part's display mesh.
+   * Deterministic for a given mesh; cached per part version.
+   */
+  partMap(partId: string): PartMapResult {
+    const m = this.engine.part(partId);
+    if (!m) throw new Error('Parte não encontrada.');
+    const hit = this.partMaps.get(m);
+    if (hit) return { ...hit, labels: hit.labels.slice() };
+    const result = partMapOf(m);
+    this.partMaps.set(m, result);
+    while (this.partMaps.size > 4) this.partMaps.delete(this.partMaps.keys().next().value as Manifold);
+    return { ...result, labels: result.labels.slice() };
   }
 
   /** Dry-run of a cut while it is being edited (pre-validation, never commits). */

@@ -1,6 +1,6 @@
 import type { BufferGeometry } from 'three';
 import { create } from 'zustand';
-import type { Bounds, ConnectorParams, ConnectorType, CutCheck, CutProfile, InspectionReport, JointInfo, OpReport, PartId, PartStats, Plane, RegionBall, RegionCutMode, RepairPlan, SmartCutCandidate, StrokeFrame, Vec2, Vec3 } from '../geometry/types';
+import type { PartMapResult, Bounds, ConnectorParams, ConnectorType, CutCheck, CutProfile, InspectionReport, JointInfo, OpReport, PartId, PartStats, Plane, RegionBall, RegionCutMode, RepairPlan, SmartCutCandidate, StrokeFrame, Vec2, Vec3 } from '../geometry/types';
 
 export type Tool = 'select' | 'cut' | 'paint' | 'brush' | 'draw';
 
@@ -104,6 +104,14 @@ export interface HoverPreview {
   confidence: number;
 }
 
+/** Automatic part map of a part version (labels per display triangle), computed in the worker. */
+export interface PartMapCache {
+  version: number;
+  status: 'pending' | 'ready' | 'error';
+  result?: PartMapResult;
+  error?: string;
+}
+
 /** Raio-X panel: inspection reports waiting for the user's repair choices. */
 export interface XRayState {
   reports: InspectionReport[];
@@ -123,6 +131,9 @@ interface UIState {
   cutCheck: CutCheckState | null;
   hover: HoverPreview | null;
   xray: XRayState | null;
+  partMaps: Record<PartId, PartMapCache>;
+  /** Detected part under the cursor (or the list row under it). */
+  mapHover: { part: PartId; group: number } | null;
   /** Connector operation open in the inspector. */
   connectorEdit: string | null;
   explode: number;
@@ -158,6 +169,8 @@ export const useUI = create<UIState>(() => ({
   cutCheck: null,
   hover: null,
   xray: null,
+  partMaps: {},
+  mapHover: null,
   connectorEdit: null,
   explode: 0,
   assembly: null,

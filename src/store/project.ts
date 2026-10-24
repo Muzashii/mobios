@@ -27,6 +27,16 @@ export interface PartMeta {
   down?: Vec3;
 }
 
+/**
+ * User edits on top of a part's automatic part map (the map itself is recomputed from the
+ * mesh: it is deterministic, see geometry/partmap.ts). Ids are the automatic part ids.
+ */
+export interface PartMapEdits {
+  names: Record<number, string>;
+  /** Automatic part → the part it was merged into. */
+  merged: Record<number, number>;
+}
+
 export interface ProjectDoc {
   schema: 1;
   id: string;
@@ -40,6 +50,8 @@ export interface ProjectDoc {
   sources: SourceRef[];
   operations: Operation[];
   partMeta: Record<PartId, PartMeta>;
+  /** Parts whose automatic part map is shown, with the user's names and merges. */
+  partMaps?: Record<PartId, PartMapEdits>;
 }
 
 export const DEFAULT_FILAMENTS = ['#E8E4DC', '#FF6B2C', '#3A86FF', '#2B2D31'];

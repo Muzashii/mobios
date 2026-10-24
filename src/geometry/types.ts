@@ -158,6 +158,23 @@ export interface SmartCutCandidate {
 }
 
 /** SmartCut suggestion: candidates (best first) for one cluster of seeds. */
+/** One automatic part of a figure (part map, see segment/parts.ts). */
+export interface AutoPart {
+  id: number;
+  /** Suggested name ("Chapéu", "Braço esquerdo"…); the user may rename it. */
+  name: string;
+  /** Share of the surface (0–1). */
+  share: number;
+  centroid: Vec3;
+}
+
+/** Part map of one part: a label per triangle of its display mesh (same order) and the parts. */
+export interface PartMapResult {
+  labels: Uint16Array;
+  parts: AutoPart[];
+  ms: number;
+}
+
 export interface SmartCutSuggestion {
   plane: Plane;
   radius: number;

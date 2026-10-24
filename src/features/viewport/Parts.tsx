@@ -7,6 +7,7 @@ import { focus, setUI, useUI, type ViewPart } from '../../store/ui';
 import { ACCENT } from '../../ui/tokens';
 import { partColor } from '../paint/colors';
 import { brushDown, brushLeave, brushMove } from '../smartcut/brush';
+import { PartMapMesh } from './PartMapMesh';
 
 const accent = new Color(ACCENT);
 
@@ -66,20 +67,30 @@ export function Parts({ offsets, hiddenId }: { offsets: Map<string, Vector3>; hi
   const hovered = useUI((s) => s.hovered);
   const drafting = useUI((s) => !!s.draft);
   const doc = useHistory((s) => s.doc);
+  const maps = useUI((s) => s.partMaps);
+  const tool = useUI((s) => s.tool);
   const visible = useMemo(() => parts.filter((p) => doc.partMeta[p.id]?.visible !== false && p.id !== hiddenId), [parts, doc.partMeta, hiddenId]);
   return (
     <group>
-      {visible.map((p) => (
-        <PartMesh
-          key={p.id}
-          part={p}
-          offset={offsets.get(p.id)!}
-          color={partColor(doc, p)}
-          selected={selection === p.id}
-          hovered={hovered === p.id}
-          interactive={!drafting && !doc.partMeta[p.id]?.locked}
-        />
-      ))}
+      {visible.map((p) => {
+        const interactive = !drafting && !doc.partMeta[p.id]?.locked;
+        // Detected parts show while selecting; cutting, painting and the brush use the plain mesh.
+        const edits = doc.partMaps?.[p.id];
+        const map = maps[p.id];
+        if (edits && tool === 'select' && map?.status === 'ready' && map.version === p.version && map.result)
+          return <PartMapMesh key={p.id} part={p} offset={offsets.get(p.id)!} result={map.result} edits={edits} interactive={interactive} />;
+        return (
+          <PartMesh
+            key={p.id}
+            part={p}
+            offset={offsets.get(p.id)!}
+            color={partColor(doc, p)}
+            selected={selection === p.id}
+            hovered={hovered === p.id}
+            interactive={interactive}
+          />
+        );
+      })}
     </group>
   );
 }

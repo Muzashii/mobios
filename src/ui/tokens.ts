@@ -51,6 +51,13 @@ export function autoPartColor(index: number): string {
   return PART_COLORS[index % PART_COLORS.length];
 }
 
+/** Detected parts of a figure (part map): distinct hues, readable on both themes. */
+const MAP_COLORS = ['#E8A87C', '#7FB3D5', '#9BC89B', '#C3A6D8', '#E6CF7A', '#86C5C0', '#E59A9A', '#A7B6E8', '#F2B880', '#8FD3B6', '#D9A6C4', '#C9B79C'];
+
+export function mapPartColor(index: number): string {
+  return MAP_COLORS[index % MAP_COLORS.length];
+}
+
 export const CUT_A = '#7FB3D5';
 export const CUT_B = ACCENT;
 /** SmartCut negative seeds (Shift + brush: "keep this with the body"). */

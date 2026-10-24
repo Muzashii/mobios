@@ -45,6 +45,10 @@ const api = {
     const h = (await service).smartHover(partId, point, seedRadius);
     return h ? Comlink.transfer(h, [h.preview.buffer as ArrayBuffer]) : null;
   },
+  async partMap(partId: string) {
+    const r = (await service).partMap(partId);
+    return Comlink.transfer(r, [r.labels.buffer as ArrayBuffer]);
+  },
   async checkCut(op: CutOperation, beforeOp?: string) {
     const c = (await service).checkCut(op, beforeOp);
     return Comlink.transfer(c, c.previewB ? ([c.previewB.positions.buffer, c.previewB.normals.buffer] as ArrayBuffer[]) : []);

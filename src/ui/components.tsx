@@ -213,10 +213,11 @@ export function Segmented<T extends string>({ value, options, onChange, label }:
   );
 }
 
-export function Select<T extends string>({ id, value, options, onChange }: { id?: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
+export function Select<T extends string>({ id, value, options, onChange, 'aria-label': ariaLabel }: { id?: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void; 'aria-label'?: string }) {
   return (
     <select
       id={id}
+      aria-label={ariaLabel}
       value={value}
       onChange={(e) => onChange(e.target.value as T)}
       className="h-7 w-full rounded-md border border-line bg-surface-2 px-1.5 text-xs text-text outline-none focus:border-accent"

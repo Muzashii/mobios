@@ -1,6 +1,6 @@
 import { cutPartIds, pinsPartId } from '../geometry/engine';
 import type { Operation, PartId, SourceRef, Technology } from '../geometry/types';
-import type { PartMeta, ProjectDoc } from './project';
+import type { PartMapEdits, PartMeta, ProjectDoc } from './project';
 
 /** Every state change is a Command: a label (shown in undo) and a pure doc -> doc function. */
 export interface Command {
@@ -127,3 +127,58 @@ export const setFilament = (slot: number, color: string): Command => ({
   coalesce: `filament-${slot}`,
   apply: (doc) => ({ ...doc, filaments: doc.filaments.map((c, i) => (i === slot - 1 ? color : c)) }),
 });
+
+const editMap = (doc: ProjectDoc, id: PartId, fn: (e: PartMapEdits) => PartMapEdits): ProjectDoc => {
+  const cur = doc.partMaps?.[id];
+  return cur ? { ...doc, partMaps: { ...doc.partMaps, [id]: fn(cur) } } : doc;
+};
+
+/** Shows (or hides, keeping nothing) the automatic part map of a part. */
+export const showPartMap = (id: PartId, on: boolean): Command => ({
+  label: on ? 'Detectar partes' : 'Ocultar partes',
+  apply: (doc) => {
+    const maps = { ...doc.partMaps };
+    if (on) maps[id] ??= { names: {}, merged: {} };
+    else delete maps[id];
+    return { ...doc, partMaps: maps };
+  },
+});
+
+export const renameMapPart = (id: PartId, part: number, name: string): Command => ({
+  label: 'Renomear parte detectada',
+  coalesce: `map-name-${id}-${part}`,
+  apply: (doc) => editMap(doc, id, (e) => ({ ...e, names: { ...e.names, [part]: name } })),
+});
+
+/** Merges automatic part `from` (and whatever was merged into it) into `into`'s group. */
+export const mergeMapParts = (id: PartId, from: number, into: number, label: string): Command => ({
+  label,
+  apply: (doc) =>
+    editMap(doc, id, (e) => {
+      const target = resolveMapPart(e, into);
+      const source = resolveMapPart(e, from);
+      if (target === source) return e;
+      const merged = { ...e.merged };
+      for (const [k, v] of Object.entries(merged)) if (v === source) merged[+k] = target;
+      merged[source] = target;
+      return { ...e, merged };
+    }),
+});
+
+/** Takes an automatic part back out of the group it was merged into. */
+export const unmergeMapPart = (id: PartId, part: number, label: string): Command => ({
+  label,
+  apply: (doc) =>
+    editMap(doc, id, (e) => {
+      const merged = { ...e.merged };
+      delete merged[part];
+      return { ...e, merged };
+    }),
+});
+
+/** Group (root automatic part) an automatic part belongs to after the user's merges. */
+export function resolveMapPart(e: PartMapEdits, part: number): number {
+  let p = part;
+  for (let guard = 0; guard < 64 && e.merged[p] !== undefined && e.merged[p] !== p; guard++) p = e.merged[p];
+  return p;
+}
