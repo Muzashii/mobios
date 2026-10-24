@@ -60,10 +60,11 @@ export function repairWithPlan(wasm: Wasm, positions: Float32Array, indices: Uin
       solid.delete();
       solid = null;
     }
-    if (!solid) notes.push('reparo topológico não fechou a malha — usado remesh volumétrico');
+    if (!solid) notes.push('o reparo sem perda não fechou a malha — ela foi reconstruída (remesh volumétrico)');
   }
   if (!solid) {
-    const res = Math.round(Math.min(400, Math.max(32, plan.volumetricResolution ?? 160)));
+    // Chosen by the user: their resolution. Forced fallback: finer, to keep as much as possible.
+    const res = Math.round(Math.min(400, Math.max(32, plan.volumetricResolution ?? (volumetric ? 160 : 240))));
     const { manifold, voxel } = volumetricRemesh(wasm, mesh, res);
     solid = manifold;
     notes.push(`remesh volumétrico (${res} voxels; detalhe mínimo ≈ ${voxel.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} mm)`);

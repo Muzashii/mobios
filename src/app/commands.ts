@@ -3,7 +3,7 @@ import { exportAssemblyGuide } from '../features/export/assemblyGuide';
 import { autoSplitPart } from '../features/analysis/PrintPrep';
 import { addCalibration, newProject, openExample, openFilePicker } from '../features/import/importActions';
 import { startBrush, startCut, startDraw } from '../features/cut/cutActions';
-import { setPartMeta } from '../store/commands';
+import { removeSource, setPartMeta, sourceOf } from '../store/commands';
 import { dispatch, useHistory } from '../store/history';
 import { saveDocNow } from '../store/persistence';
 import { focus, setUI, toast, useUI } from '../store/ui';
@@ -51,6 +51,21 @@ export function toggleSelectedVisibility() {
   dispatch(setPartMeta(selection, { visible: !visible }, visible ? 'Ocultar parte' : 'Mostrar parte'));
 }
 
+/** Deletes the imported model the selected part comes from (with its cuts); Ctrl+Z brings it back. */
+export function deleteSelectedModel(part = useUI.getState().selection) {
+  if (!part) return;
+  const doc = useHistory.getState().doc;
+  const source = sourceOf(doc, part);
+  if (!source) {
+    toast('info', 'Esta peça não vem de um modelo importado', 'Pinos soltos somem junto com o corte que os criou.');
+    return;
+  }
+  const name = doc.sources.find((s) => s.id === source)?.name ?? 'modelo';
+  dispatch(removeSource(source, name));
+  setUI({ selection: null, connectorEdit: null });
+  toast('success', `${name} excluído`, 'Ctrl+Z desfaz.');
+}
+
 /** Single registry: drives the command palette (Ctrl+K) and documents shortcuts. */
 export const APP_COMMANDS: AppCommand[] = [
   { id: 'open', label: 'Abrir modelo (STL, OBJ, 3MF, .mobios)', shortcut: 'Ctrl+O', group: 'Arquivo', run: () => void openFilePicker() },
@@ -82,6 +97,7 @@ export const APP_COMMANDS: AppCommand[] = [
   { id: 'explode', label: 'Alternar vista explodida', shortcut: 'E', group: 'Visualizar', run: toggleExplode },
   { id: 'focus', label: 'Focar seleção / tudo', shortcut: 'F', group: 'Visualizar', run: () => focus(useUI.getState().selection ?? 'all') },
   { id: 'hide', label: 'Ocultar/mostrar parte selecionada', shortcut: 'H', group: 'Visualizar', run: toggleSelectedVisibility },
+  { id: 'delete', label: 'Excluir modelo da parte selecionada', shortcut: 'Del', group: 'Editar', run: () => deleteSelectedModel() },
   { id: 'bed', label: 'Mostrar/ocultar volume da impressora', group: 'Visualizar', run: () => setUI({ showBed: !useUI.getState().showBed }) },
   { id: 'theme', label: 'Alternar tema claro/escuro', group: 'Visualizar', run: toggleTheme },
   { id: 'calibration', label: 'Gerar peça de calibração de folga', group: 'Encaixes', run: () => void addCalibration() },

@@ -47,3 +47,23 @@ describe('commands + undo/redo', () => {
     expect(removeWithDependents(ops, 'c2').map((o) => o.id)).toEqual(['c1', 'k1', 'c4']);
   });
 });
+
+describe('excluir modelo', () => {
+  it('removes a mesh with every cut made from it, from any of its pieces', async () => {
+    const { createProject } = await import('../../src/store/project');
+    const { addOperation, removeSource, sourceOf } = await import('../../src/store/commands');
+    let doc = createProject();
+    doc = { ...doc, sources: [{ id: 'fig', name: 'Figura' }, { id: 'out', name: 'Outro' }] as typeof doc.sources };
+    const plane = { origin: [0, 0, 0] as [number, number, number], normal: [0, 0, 1] as [number, number, number] };
+    doc = addOperation({ kind: 'cut-plane', id: 'c1', target: 'fig', plane }, 'corte').apply(doc);
+    doc = addOperation({ kind: 'cut-region', id: 'c2', target: 'c1.b', balls: [], seeds: [], level: 1, mode: 'auto', plane } as never, 'smartcut').apply(doc);
+    doc = addOperation({ kind: 'connector', id: 'k1', joint: 'c2', type: 'pin', params: {} } as never, 'pino').apply(doc);
+    doc = addOperation({ kind: 'cut-plane', id: 'c3', target: 'out', plane }, 'corte').apply(doc);
+    expect(sourceOf(doc, 'c2.a')).toBe('fig');
+    expect(sourceOf(doc, 'c3.b')).toBe('out');
+    expect(sourceOf(doc, 'k1.pins')).toBeNull();
+    const after = removeSource('fig', 'Figura').apply(doc);
+    expect(after.sources.map((s) => s.id)).toEqual(['out']);
+    expect(after.operations.map((o) => o.id)).toEqual(['c3']);
+  });
+});

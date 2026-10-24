@@ -1,5 +1,6 @@
 import { materialGrams } from '../../geometry/analysis';
-import { removeSource, setPartMeta } from '../../store/commands';
+import { setPartMeta } from '../../store/commands';
+import { deleteSelectedModel } from '../../app/commands';
 import { dispatch, useHistory } from '../../store/history';
 import { printerOf } from '../../store/project';
 import { focus, useUI, type ViewPart } from '../../store/ui';
@@ -36,7 +37,6 @@ export function PartInspector({ part }: { part: ViewPart }) {
   const size = [0, 1, 2].map((i) => s.bounds.max[i] - s.bounds.min[i]);
   const printer = printerOf(doc);
   const fit = fitsPrinter(size, printer.volume);
-  const isSource = doc.sources.some((x) => x.id === part.id);
   const biggest = joints.reduce<(typeof joints)[number] | null>((best, j) => (!best || j.faceArea > best.faceArea ? j : best), null);
 
   return (
@@ -67,8 +67,8 @@ export function PartInspector({ part }: { part: ViewPart }) {
           <Button size="sm" onClick={() => dispatch(setPartMeta(part.id, { visible: meta.visible === false }, meta.visible === false ? 'Mostrar parte' : 'Ocultar parte'))}>
             {meta.visible === false ? <IconEye size={14} /> : <IconEyeOff size={14} />}
           </Button>
-          {isSource && (
-            <Button size="sm" variant="danger" onClick={() => dispatch(removeSource(part.id, name))} title="Remover malha do projeto">
+          {!part.id.endsWith('.pins') && (
+            <Button size="sm" variant="danger" onClick={() => deleteSelectedModel(part.id)} title="Excluir o modelo importado (com os cortes dele) — Del" aria-label="Excluir modelo">
               <IconTrash size={14} />
             </Button>
           )}

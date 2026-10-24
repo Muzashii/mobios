@@ -7,7 +7,12 @@ import { focus, setUI, toast } from '../store/ui';
 /** Starts the worker, restores the autosaved project and wires sync. */
 export async function bootstrap() {
   const t0 = performance.now();
-  const saved = await loadCurrent();
+  // A stuck IndexedDB (another tab holding it during an upgrade or a delete) must not leave the
+  // app blank: give up on the autosave after a few seconds and start empty.
+  const stuck = Symbol('stuck');
+  const restored = await Promise.race([loadCurrent(), new Promise<typeof stuck>((r) => setTimeout(() => r(stuck), 5000))]);
+  if (restored === stuck) toast('warning', 'Não consegui abrir o projeto salvo neste navegador', 'Feche outras abas do Mobios e recarregue para recuperá-lo.', 10000);
+  const saved = restored === stuck ? null : restored;
   const warmUp = async () => {
     try {
       await geometry().ping(); // loads WASM in the worker

@@ -145,7 +145,7 @@ describe('Raio-X — diagnóstico', () => {
     manifolds.forEach((x) => x.delete());
   });
 
-  it('self-intersections inside one shell → volumetric remesh fixes them', () => {
+  it('self-intersections inside one shell: kept by default, volumetric remesh on request', () => {
     const c = cubeMesh(20);
     // Push one top vertex down through the bottom: its faces cross the others.
     const pos = Float32Array.from(c.positions);
@@ -157,7 +157,14 @@ describe('Raio-X — diagnóstico', () => {
     const r = inspect(bent);
     const si = issue(r, 'self-intersections')!;
     expect(si).toBeDefined();
-    expect(si.options[0].value).toBe('volumetric');
+    // Recommended: keep the surface (a voxel rebuild wipes out sculpted detail).
+    expect(si.options[0].value).toBe('keep');
+    expect(si.severity).toBe('warning');
+    const kept = repairWithPlan(wasm, bent.positions, bent.indices, { 'self-intersections': 'keep' });
+    expect(kept.manifolds[0].status()).toBe('NoError');
+    expect(kept.manifolds[0].numTri()).toBe(bent.indices.length / 3);
+    expect(kept.notes.join(' ')).not.toMatch(/volumétrico/);
+    kept.manifolds.forEach((x) => x.delete());
     const { manifolds, notes } = repairWithPlan(wasm, bent.positions, bent.indices, { 'self-intersections': 'volumetric', volumetricResolution: 48 });
     expect(manifolds[0].status()).toBe('NoError');
     expect(manifolds[0].volume()).toBeGreaterThan(0);

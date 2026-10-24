@@ -3,7 +3,8 @@ import { dispatch, useHistory } from '../store/history';
 import { printerOf } from '../store/project';
 import { focus, setUI, useUI } from '../store/ui';
 import { cx } from '../ui/components';
-import { IconAlert, IconEye, IconEyeOff, IconLock, IconUnlock } from '../ui/icons';
+import { IconAlert, IconEye, IconEyeOff, IconLock, IconTrash, IconUnlock } from '../ui/icons';
+import { deleteSelectedModel } from './commands';
 import { fitsPrinter } from '../features/analysis/PartInspector';
 import { partColor } from '../features/paint/colors';
 
@@ -71,6 +72,16 @@ export function Outliner() {
               >
                 {hidden ? <IconEyeOff size={13} /> : <IconEye size={13} />}
               </button>
+              {!p.id.endsWith('.pins') && (
+                <button
+                  aria-label={`Excluir o modelo de ${name}`}
+                  title="Excluir o modelo importado (com os cortes dele) — Del"
+                  className="flex h-6 w-6 items-center justify-center rounded text-muted opacity-0 hover:text-danger focus:opacity-100 group-hover:opacity-100"
+                  onClick={() => deleteSelectedModel(p.id)}
+                >
+                  <IconTrash size={13} />
+                </button>
+              )}
             </li>
           );
         })}

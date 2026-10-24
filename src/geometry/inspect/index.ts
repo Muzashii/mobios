@@ -358,13 +358,15 @@ export function inspectMesh(id: string, name: string, positions: Float32Array, i
     const markers = faceMarkers(mesh, si.faces);
     issues.push({
       kind: 'self-intersections',
-      severity: 'critical',
+      // Common in sculpts and scans and harmless for printing; rebuilding the whole mesh in voxels
+      // would wipe out hair, faces and folds, so keeping the surface is the recommendation.
+      severity: 'warning',
       title: 'Autointerseções',
-      detail: `${fmt(within)} par(es) de triângulos da mesma casca se atravessam${si.complete ? '' : ' (busca interrompida — pode haver mais)'}. Booleanos e cortes podem falhar nessas regiões.`,
+      detail: `${fmt(within)} par(es) de triângulos da mesma casca se atravessam${si.complete ? '' : ' (busca interrompida — pode haver mais)'}. Comum em esculturas e scans; um corte que passe exatamente por elas pode falhar.`,
       count: within,
       options: [
-        { value: 'volumetric', label: 'Remesh volumétrico', hint: 'Resolve qualquer autointerseção; perde detalhe menor que a resolução.' },
-        { value: 'keep', label: 'Manter (arriscado)' },
+        { value: 'keep', label: 'Manter a superfície', hint: 'Preserva todos os detalhes. Cortes e encaixes funcionam na grande maioria dos casos.' },
+        { value: 'volumetric', label: 'Remesh volumétrico', hint: 'Reconstrói a malha inteira em voxels: resolve tudo, mas suaviza e perde detalhe fino (cabelo, rosto, dobras). Use só se um corte falhar.' },
       ],
       focus: boundsOf(markers.positions),
       markers,

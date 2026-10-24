@@ -65,6 +65,11 @@ export function useShortcuts() {
         setUI({ selection: null, connectorEdit: null, tool: 'select' });
         return;
       }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && useUI.getState().selection) {
+        e.preventDefault();
+        runCommand('delete');
+        return;
+      }
       const single: Record<string, string> = { c: 'cut', s: 'smartcut', b: 'brush', l: 'draw', t: 'paint', v: 'select', e: 'explode', f: 'focus', h: 'hide', m: 'assembly' };
       if (single[key]) {
         e.preventDefault();

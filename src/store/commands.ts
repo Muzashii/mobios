@@ -49,7 +49,7 @@ export const updateOperation = (op: Operation, label: string, coalesce?: string)
 
 /** Parts produced by an operation (used for cascading deletes). */
 export function producedParts(op: Operation): PartId[] {
-  if (op.kind === 'cut-plane' || op.kind === 'cut-surface') {
+  if (op.kind === 'cut-plane' || op.kind === 'cut-surface' || op.kind === 'cut-region') {
     const { a, b } = cutPartIds(op.id);
     return [a, b];
   }
@@ -57,7 +57,7 @@ export function producedParts(op: Operation): PartId[] {
 }
 
 export function consumedParts(op: Operation): PartId[] {
-  return op.kind === 'cut-plane' || op.kind === 'cut-surface' || op.kind === 'hollow' ? [op.target] : [];
+  return op.kind === 'cut-plane' || op.kind === 'cut-surface' || op.kind === 'cut-region' || op.kind === 'hollow' ? [op.target] : [];
 }
 
 /** Removes an operation and everything that depends on what it produced. */
@@ -85,14 +85,34 @@ export const removeOperation = (id: string, label: string): Command => ({
   apply: (doc) => ({ ...doc, operations: removeWithDependents(doc.operations, id) }),
 });
 
+/** Removes an imported mesh with everything made from it (cuts, connectors, hollowing…). */
 export const removeSource = (id: PartId, name: string): Command => ({
-  label: `Remover ${name}`,
+  label: `Excluir ${name}`,
   apply: (doc) => {
     let ops = doc.operations;
-    for (const op of doc.operations) if ((op.kind === 'cut-plane' || op.kind === 'cut-surface') && op.target === id) ops = removeWithDependents(ops, op.id);
-    return { ...doc, sources: doc.sources.filter((s) => s.id !== id), operations: ops };
+    for (const op of doc.operations) if (consumedParts(op).includes(id)) ops = removeWithDependents(ops, op.id);
+    const partMaps = { ...doc.partMaps };
+    delete partMaps[id];
+    return { ...doc, sources: doc.sources.filter((s) => s.id !== id), operations: ops, partMaps };
   },
 });
+
+/**
+ * Imported mesh a part comes from, following its cuts back through the history (a piece of a
+ * piece of the figure → the figure). Null for parts that are not made from a mesh (loose pins).
+ */
+export function sourceOf(doc: ProjectDoc, part: PartId): PartId | null {
+  const producer = new Map<PartId, Operation>();
+  for (const op of doc.operations) for (const p of producedParts(op)) producer.set(p, op);
+  let p = part;
+  for (let guard = 0; guard < 1000; guard++) {
+    if (doc.sources.some((s) => s.id === p)) return p;
+    const op = producer.get(p);
+    if (!op || !consumedParts(op).length) return null;
+    p = consumedParts(op)[0];
+  }
+  return null;
+}
 
 export const setPartMeta = (id: PartId, patch: PartMeta, label: string, coalesce?: string): Command => ({
   label,
