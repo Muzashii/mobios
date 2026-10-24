@@ -299,3 +299,43 @@ describe('SmartCut v2 — corte por região', () => {
     engine.dispose();
   });
 });
+
+describe('junta lisa (corte pela curva suavizada)', () => {
+  /** Polyline length / length after averaging over a 3 mm window (1 = no zigzag). */
+  const roughness = (loop: Vec3[]) => {
+    const pts: Vec3[] = [];
+    for (let i = 0, carry = 0; i < loop.length; i++) {
+      const a = loop[i], b = loop[(i + 1) % loop.length];
+      const d = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+      let s = carry;
+      for (; s < d; s += 0.25) pts.push([a[0] + ((b[0] - a[0]) * s) / d, a[1] + ((b[1] - a[1]) * s) / d, a[2] + ((b[2] - a[2]) * s) / d]);
+      carry = s - d;
+    }
+    const n = pts.length, len = (q: Vec3[]) => q.reduce((s, p, i) => s + Math.hypot(p[0] - q[(i + 1) % n][0], p[1] - q[(i + 1) % n][1], p[2] - q[(i + 1) % n][2]), 0);
+    const avg = pts.map((_, i) => [0, 1, 2].map((k) => { let s = 0; for (let j = -6; j <= 6; j++) s += pts[(i + j + n) % n][k]; return s / 13; }) as Vec3);
+    return len(pts) / len(avg);
+  };
+
+  it('cuts through the triangles along a smooth line instead of the edge staircase', async () => {
+    const { splitRegion } = await import('../../src/geometry/regionCut');
+    const { labelFaces, regionField } = await import('../../src/geometry/segment/region');
+    const { regionContext, snapBand, suggestRegion } = await import('../../src/geometry/smartcut');
+    const { meshDataToManifold } = await import('../../src/geometry/repair');
+    const fig = FIGURES[0];
+    const solid = fig.build(wasm);
+    const ctx = regionContext(solid, 'apply');
+    const s = suggestRegion(regionContext(solid, 'suggest'), fig.seeds, fig.seedRadius);
+    const field = regionField(ctx, s.balls, fig.seeds);
+    const lv = s.candidates[0].level;
+    const labels = labelFaces(ctx, field, lv, snapBand(ctx, lv));
+    const stair = splitRegion(ctx, labels, { mode: 'surface', towards: field.centroid, smooth: false });
+    const smooth = splitRegion(ctx, labels, { mode: 'surface', towards: field.centroid });
+    expect(smooth.loops.length).toBe(stair.loops.length);
+    expect(roughness(smooth.loops[0])).toBeLessThan(roughness(stair.loops[0]) - 0.02);
+    const a = meshDataToManifold(wasm, smooth.a), b = meshDataToManifold(wasm, smooth.b);
+    expect(a.status()).toBe('NoError');
+    expect(b.status()).toBe('NoError');
+    expect(Math.abs(a.volume() + b.volume() - solid.volume()) / solid.volume()).toBeLessThan(0.01);
+    [a, b, solid].forEach((m) => m.delete());
+  });
+});

@@ -2,7 +2,9 @@ import { Box3, Vector3 } from 'three';
 import type { Manifold } from 'manifold-3d';
 import { CutError, cutByPlane } from './cut';
 import { planeFrame } from './math';
+import { buildTopology } from './mesh/topology';
 import { trianglesIntersect } from './mesh/tritri';
+import { smoothBoundary } from './segment/smoothBoundary';
 import { meshDataToManifold } from './repair';
 import { boundaryLoops, fitPlane, labelFaces, LoopError, regionField, type RegionContext } from './segment/region';
 import type { MeshData, Plane, RegionCutOperation, Vec3 } from './types';
@@ -33,15 +35,49 @@ export interface RegionSplit {
 const at = (p: ArrayLike<number>, i: number): Vec3 => [p[i * 3], p[i * 3 + 1], p[i * 3 + 2]];
 
 /** Splits the analysis mesh by face labels (1 = B). */
-export function splitRegion(ctx: RegionContext, labels: Uint8Array, opts: { mode: 'surface' | 'shell'; depth?: number; towards: Vec3 }): RegionSplit {
-  const { topo } = ctx;
-  const loopsIdx = boundaryLoops(topo, labels);
+export function splitRegion(ctx: RegionContext, faceLabels: Uint8Array, opts: { mode: 'surface' | 'shell'; depth?: number; towards: Vec3; smooth?: boolean }): RegionSplit {
+  let topo = ctx.topo;
+  let labels = faceLabels;
+  let splitFrom: Uint32Array | null = null;
+  let loopsIdx = boundaryLoops(topo, labels);
   if (!loopsIdx.length) throw new LoopError('A região não tem contorno: ela já é uma peça separada.');
+  // Clean joint line: cut the triangles along a smoothed border instead of following their
+  // edges (the staircase). Same number of loops or nothing changes.
+  if (opts.mode === 'surface' && opts.smooth !== false) {
+    const sm = smoothBoundary(topo, labels);
+    if (sm) {
+      const t2 = buildTopology(sm.mesh);
+      try {
+        const l2 = boundaryLoops(t2, sm.labels);
+        if (l2.length === loopsIdx.length) {
+          topo = t2;
+          labels = sm.labels;
+          loopsIdx = l2;
+          splitFrom = sm.splitFrom;
+        }
+      } catch (e) {
+        if (!(e instanceof LoopError)) throw e;
+      }
+    }
+  }
   const pos: number[] = Array.from(topo.p);
   const aTris: number[] = [];
   const bTris: number[] = [];
   for (let f = 0; f < topo.nf; f++) (labels[f] ? bTris : aTris).push(topo.t[f * 3], topo.t[f * 3 + 1], topo.t[f * 3 + 2]);
 
+  // Original faces a loop vertex touches by construction: around it (two rings), or for a vertex
+  // created on an edge, around both ends of that edge. Topological, not by distance: a body
+  // 0.5 mm away (an arm next to the torso) is still checked.
+  const nv0 = ctx.topo.nv;
+  const ring = (v: number) => {
+    const { vFaceStart, vFaces, vStart, vNbr } = ctx.topo;
+    const out = new Set<number>();
+    for (const w of [v, ...vNbr.subarray(vStart[v], vStart[v + 1])]) for (let k = vFaceStart[w]; k < vFaceStart[w + 1]; k++) out.add(vFaces[k]);
+    return [...out];
+  };
+  const touching = new Map<number, Set<number>>();
+  for (const v of loopsIdx.flat())
+    touching.set(v, new Set(v < nv0 ? ring(v) : splitFrom ? [...ring(splitFrom[(v - nv0) * 2]), ...ring(splitFrom[(v - nv0) * 2 + 1])] : []));
   const loops = loopsIdx.map((l) => l.map((v) => at(topo.p, v)));
   const main = loops.reduce((x, y) => (y.length > x.length ? y : x));
   const fit = fitPlane(main, opts.towards);
@@ -73,7 +109,7 @@ export function splitRegion(ctx: RegionContext, labels: Uint8Array, opts: { mode
           if (e instanceof LoopError) continue;
           throw e;
         }
-        if (capPierces(ctx, pos, cap.tris)) {
+        if (capPierces(ctx, pos, cap.tris, touching)) {
           pos.length = mark;
           continue;
         }
@@ -181,7 +217,10 @@ export function buildCap(loop: number[], plane: Plane, pos: number[], edge: numb
     const w = s0 > 0 ? smoothstep((s - s0) / (1 - s0)) : s;
     // Dome: bulge·ρ at the centre, fading to 0 at the ring.
     const dome = bulge * rho * (1 - s * s);
-    rings.push(q.map(([x, y], i) => toWorld(cx + (x - cx) * s, cy + (y - cy) * s, zc + (local[i][2] - zc) * w + dome)));
+    // Outer rings drift from the smoothed outline to the exact loop, so the last band of
+    // triangles does not twist (radial streaks along the joint line).
+    const e = s ** 4;
+    rings.push(q.map(([x, y], i) => toWorld(cx + (x + (local[i][0] - x) * e - cx) * s, cy + (y + (local[i][1] - y) * e - cy) * s, zc + (local[i][2] - zc) * w + dome)));
   }
   rings.push(loop);
   const centre = toWorld(cx, cy, zc + bulge * rho);
@@ -279,8 +318,13 @@ function buildShell(ctx: RegionContext, labels: Uint8Array, loops: number[][], p
   if (capPierces(ctx, pos, inner)) throw new CutError('A casca dobra sobre si mesma nesta profundidade.', 'smaller-depth');
 }
 
-/** Does any cap triangle cross the original surface? (BVH culling + exact tri–tri test.) */
-function capPierces(ctx: RegionContext, pos: number[], tris: number[]): boolean {
+/**
+ * Does any cap triangle cross the original surface? (BVH culling + exact tri–tri test.)
+ * Triangles touching the cap at a loop vertex are skipped: they meet by construction, at a
+ * shared vertex or, after a smoothed cut, at a point on one of their edges (`touching`: the
+ * original faces around each loop vertex).
+ */
+function capPierces(ctx: RegionContext, pos: number[], tris: number[], touching?: Map<number, Set<number>>): boolean {
   const bvh = ctx.query.bvh;
   const T = new Float64Array(9);
   const box = new Box3();
@@ -294,10 +338,11 @@ function capPierces(ctx: RegionContext, pos: number[], tris: number[]): boolean 
     let hit = false;
     bvh.shapecast({
       intersectsBounds: (b) => b.intersectsBox(box),
-      intersectsTriangle: (tri) => {
+      intersectsTriangle: (tri, triIndex) => {
         const vs = [tri.a, tri.b, tri.c];
         // Shared loop vertices touch by construction: skip triangles that share one.
         for (const p of vs) for (let j = 0; j < 3; j++) if (p.x === T[j * 3] && p.y === T[j * 3 + 1] && p.z === T[j * 3 + 2]) return false;
+        if (touching) for (let j = 0; j < 3; j++) if (touching.get(tris[k + j])?.has(triIndex)) return false;
         vs.forEach((p, j) => { S[j * 3] = p.x; S[j * 3 + 1] = p.y; S[j * 3 + 2] = p.z; });
         if (trianglesIntersect(T, S, ctx.diag * 1e-9)) { hit = true; return true; }
         return false;

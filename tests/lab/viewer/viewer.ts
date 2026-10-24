@@ -1,6 +1,7 @@
 // Lab viewer: renders a mesh from .lab/ in 4 views, faces coloured by an optional label file.
 // URL: /tests/lab/viewer/index.html?mesh=p60000&labels=seg1&parts=a,b (parts = extra meshes, exploded)
 import * as THREE from 'three';
+import { toDisplayMesh } from '../../../src/geometry/display';
 
 const q = new URLSearchParams(location.search);
 const base = '/.lab/';
@@ -52,7 +53,16 @@ async function main() {
   const meshName = q.get('mesh') ?? 'p60000';
   const geoms: THREE.BufferGeometry[] = [];
   if (q.get('parts')) {
-    for (const n of q.get('parts')!.split(',')) geoms.push(await loadMesh(n));
+    for (const n of q.get('parts')!.split(',')) {
+      if (q.get('shade') === 'app') {
+        // Same normals as the app (creased at 35°), instead of flat shading.
+        const d = toDisplayMesh({ positions: new Float32Array(await fetchBin(`${n}.pos.bin`)), indices: new Uint32Array(await fetchBin(`${n}.idx.bin`)) });
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.BufferAttribute(d.positions, 3));
+        g.setAttribute('normal', new THREE.BufferAttribute(d.normals, 3));
+        geoms.push(g);
+      } else geoms.push(await loadMesh(n));
+    }
   } else {
     geoms.push(await loadMesh(meshName, q.get('labels') ?? undefined));
   }
@@ -61,7 +71,7 @@ async function main() {
   const center = box.getCenter(new THREE.Vector3());
   const explode = Number(q.get('explode') ?? 0);
   geoms.forEach((g, i) => {
-    const mat = new THREE.MeshStandardMaterial({ vertexColors: !q.get('parts'), color: q.get('parts') ? PALETTE[(i + 1) % PALETTE.length] : 0xffffff, flatShading: true, roughness: 0.7 });
+    const mat = new THREE.MeshStandardMaterial({ vertexColors: !q.get('parts'), color: q.get('parts') ? PALETTE[(i + 1) % PALETTE.length] : 0xffffff, flatShading: q.get('shade') !== 'app', roughness: 0.7 });
     const m = new THREE.Mesh(g, mat);
     if (explode) {
       const c = g.boundingBox!.getCenter(new THREE.Vector3()).sub(center).multiplyScalar(explode);
@@ -80,6 +90,7 @@ async function main() {
     ['direita (+X)', new THREE.Vector3(1, -0.25, 0.15)],
   ];
   const grid = document.getElementById('grid')!;
+  if (views.length === 1) grid.style.gridTemplateColumns = grid.style.gridTemplateRows = '1fr';
   for (const [name, dir] of views) {
     const cell = document.createElement('div');
     cell.className = 'cell';
