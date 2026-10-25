@@ -58,6 +58,10 @@ const api = {
     const buffers = reports.flatMap((r) => [r.preview.positions.buffer, r.preview.normals.buffer, ...r.issues.flatMap((i) => (i.markers ? [i.markers.positions.buffer] : []))]) as ArrayBuffer[];
     return Comlink.transfer(reports, buffers);
   },
+  async inspectSource(sourceId: string, id: string, name: string, tech: Technology, buildVolume?: Vec3): Promise<InspectionReport> {
+    const r = (await service).inspectSource(sourceId, id, name, tech, buildVolume);
+    return Comlink.transfer(r, [r.preview.positions.buffer, r.preview.normals.buffer, ...r.issues.flatMap((i) => (i.markers ? [i.markers.positions.buffer] : []))] as ArrayBuffer[]);
+  },
   async finishImport(id: string, plan: RepairPlan) {
     const out = (await service).finishImport(id, plan);
     return Comlink.transfer(out, out.meshes.flatMap((m) => meshBuffers(m.mesh)));

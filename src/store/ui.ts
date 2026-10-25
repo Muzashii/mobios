@@ -120,6 +120,8 @@ export interface XRayState {
   /** Issue highlighted in the viewport. */
   focusIssue: number | null;
   fileName: string;
+  /** Set when repairing a mesh already in the project (the result replaces that source). */
+  repairOf?: PartId;
 }
 
 interface UIState {

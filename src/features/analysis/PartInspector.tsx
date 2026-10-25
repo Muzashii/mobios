@@ -1,5 +1,6 @@
 import { materialGrams } from '../../geometry/analysis';
-import { setPartMeta } from '../../store/commands';
+import { setPartMeta, sourceOf } from '../../store/commands';
+import { openRepair } from '../import/importActions';
 import { deleteSelectedModel } from '../../app/commands';
 import { dispatch, useHistory } from '../../store/history';
 import { printerOf } from '../../store/project';
@@ -67,6 +68,11 @@ export function PartInspector({ part }: { part: ViewPart }) {
           <Button size="sm" onClick={() => dispatch(setPartMeta(part.id, { visible: meta.visible === false }, meta.visible === false ? 'Mostrar parte' : 'Ocultar parte'))}>
             {meta.visible === false ? <IconEye size={14} /> : <IconEyeOff size={14} />}
           </Button>
+          {sourceOf(doc, part.id) && (
+            <Button size="sm" onClick={() => void openRepair(sourceOf(doc, part.id)!)} title="Raio-X da malha: autointerseções, paredes finas, remesh, decimação…">
+              Reparar malha
+            </Button>
+          )}
           {!part.id.endsWith('.pins') && (
             <Button size="sm" variant="danger" onClick={() => deleteSelectedModel(part.id)} title="Excluir o modelo importado (com os cortes dele) — Del" aria-label="Excluir modelo">
               <IconTrash size={14} />

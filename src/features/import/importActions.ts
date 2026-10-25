@@ -3,7 +3,7 @@ import { geometry } from '../../geometry/client';
 import type { ImportedMesh, InspectionReport, RepairPlan } from '../../geometry/types';
 import { unpackProject } from '../../io';
 import { pickFiles } from '../../lib/download';
-import { addSources } from '../../store/commands';
+import { addSources, replaceSource } from '../../store/commands';
 import { dispatch, getDoc, useHistory } from '../../store/history';
 import { createProject, newId, printerOf, type ProjectDoc } from '../../store/project';
 import { pruneMeshes, saveDocNow, saveMesh } from '../../store/persistence';
@@ -46,6 +46,21 @@ async function registerImported(list: ImportedMesh[], label: string, repair?: st
   if (!repaired.length) toast('success', label);
 }
 
+/**
+ * What import does on its own: only what the engine needs to work with the mesh and loses
+ * nothing (weld, orient, close holes, merge overlapping shells, obvious unit). Rebuilding,
+ * decimating or splitting stay options of "Reparar malha".
+ */
+export function quietPlan(r: InspectionReport): RepairPlan {
+  const plan: RepairPlan = {};
+  const lossy = (kind: string, value: string) => value === 'volumetric' || (kind === 'huge' && value !== '0') || value === 'autosplit';
+  for (const i of r.issues) {
+    const keep = i.options.find((o) => !lossy(i.kind, o.value));
+    if (keep) plan[i.kind] = keep.value;
+  }
+  return plan;
+}
+
 /** The recommended plan: first option of every issue. */
 export function recommendedPlan(r: InspectionReport): RepairPlan {
   const plan: RepairPlan = {};
@@ -54,8 +69,9 @@ export function recommendedPlan(r: InspectionReport): RepairPlan {
 }
 
 /**
- * Import with Raio-X: the worker inspects the raw mesh and nothing is changed until the user
- * picks the repairs. A mesh without any problem goes straight in (nothing to decide).
+ * Import goes straight to the model: the worker inspects the mesh and applies only the lossless
+ * fixes (`quietPlan`). What is left (self-intersections, thin walls, huge meshes…) is reported
+ * once; the full Raio-X with every repair option is "Reparar malha" on the part, any time.
  */
 export async function importFiles(files: File[]) {
   for (const file of files) {
@@ -63,27 +79,16 @@ export async function importFiles(files: File[]) {
       await openProjectFile(file);
       continue;
     }
-    setUI({ busy: true, busyLabel: `Raio-X de ${file.name}…` });
+    setUI({ busy: true, busyLabel: `Abrindo ${file.name}…` });
     try {
       const buffer = await file.arrayBuffer();
       const doc = getDoc();
       const reports = await geometry().inspectFile(file.name, Comlink.transfer(buffer, [buffer]), newId('s'), doc.technology, printerOf(doc).volume);
-      const clean = reports.every((r) => r.grade === 'ok' && r.issues.every((i) => i.severity === 'info' && i.options.length === 0));
-      if (clean) {
-        for (const r of reports) await finishOne(r, {});
-        continue;
+      for (const r of reports) {
+        await finishOne(r, quietPlan(r));
+        const open = r.issues.filter((i) => i.severity !== 'info' && i.options.some((o) => o.value === 'volumetric' || (i.kind === 'huge' && o.value !== '0')));
+        if (open.length) toast('info', `${r.name}: ${open.map((i) => i.title.toLowerCase()).join(', ')}`, 'O modelo entrou como está. Se precisar, use "Reparar malha" na parte.', 8000);
       }
-      setUI({ busy: false });
-      openXRay(file.name, reports);
-      // One file at a time: the next waits until this panel is closed.
-      await new Promise<void>((resolve) => {
-        const off = useUI.subscribe((s) => {
-          if (!s.xray) {
-            off();
-            resolve();
-          }
-        });
-      });
     } catch (e) {
       toast('error', `Não foi possível importar ${file.name}`, e instanceof Error ? e.message : String(e), 8000);
     } finally {
@@ -92,9 +97,21 @@ export async function importFiles(files: File[]) {
   }
 }
 
-function openXRay(fileName: string, reports: InspectionReport[]) {
-  setUI({ xray: { reports, index: 0, plans: reports.map(recommendedPlan), focusIssue: null, fileName }, tool: 'select', draft: null });
-  setTimeout(() => focusBox(reports[0].bounds), 60);
+/** "Reparar malha": Raio-X of a mesh already in the project, with every repair option. */
+export async function openRepair(sourceId: string) {
+  const doc = getDoc();
+  const src = doc.sources.find((s) => s.id === sourceId);
+  if (!src) return;
+  setUI({ busy: true, busyLabel: `Raio-X de ${src.name}…` });
+  try {
+    const r = await geometry().inspectSource(sourceId, newId('s'), src.name, doc.technology, printerOf(doc).volume);
+    setUI({ xray: { reports: [r], index: 0, plans: [recommendedPlan(r)], focusIssue: null, fileName: src.name, repairOf: sourceId }, tool: 'select', draft: null });
+    setTimeout(() => focusBox(r.bounds), 60);
+  } catch (e) {
+    toast('error', 'Não foi possível analisar a malha', e instanceof Error ? e.message : String(e));
+  } finally {
+    setUI({ busy: false });
+  }
 }
 
 async function finishOne(r: InspectionReport, plan: RepairPlan) {
@@ -109,14 +126,25 @@ async function finishOne(r: InspectionReport, plan: RepairPlan) {
   }
 }
 
-/** Raio-X "Reparar e importar" for the report on screen; moves to the next one. */
+/** Raio-X "Aplicar reparo" for the report on screen; moves to the next one. */
 export async function applyXRay() {
   const x = useUI.getState().xray;
   if (!x) return;
   const r = x.reports[x.index];
   setUI({ busy: true, busyLabel: `Reparando ${r.name}…` });
   try {
-    await finishOne(r, x.plans[x.index]);
+    if (x.repairOf) {
+      // The repaired mesh takes the old one's place (cuts and names follow); extra bodies of a
+      // "separate" plan come in as new parts.
+      const out = await geometry().finishImport(r.id, x.plans[x.index]);
+      for (const m of out.meshes) await saveMesh(m.id, m.mesh);
+      const [first, ...rest] = out.meshes;
+      const old = getDoc().sources.find((s) => s.id === x.repairOf);
+      dispatch(replaceSource(x.repairOf, { id: first.id, name: old?.name ?? first.name, repair: out.summary }, `Reparar ${old?.name ?? 'malha'}`));
+      if (rest.length) dispatch(addSources(rest.map(({ id, name }) => ({ id, name }))));
+      setUI({ selection: first.id });
+      toast('success', 'Malha reparada', `${out.summary} — Ctrl+Z desfaz.`, 7000);
+    } else await finishOne(r, x.plans[x.index]);
     nextXRay();
   } catch (e) {
     toast('error', `Reparo de ${r.name} falhou`, `${e instanceof Error ? e.message : String(e)} — tente o remesh volumétrico.`, 9000);

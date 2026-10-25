@@ -98,6 +98,31 @@ export const removeSource = (id: PartId, name: string): Command => ({
 });
 
 /**
+ * Swaps an imported mesh for a repaired version: everything that pointed at the old one (cuts,
+ * names, filament, detected parts) now points at the new one. Undo brings the old mesh back.
+ */
+export const replaceSource = (oldId: PartId, next: SourceRef, label: string): Command => ({
+  label,
+  apply: (doc) => {
+    const retarget = <T extends Operation>(op: T): T => ('target' in op && op.target === oldId ? { ...op, target: next.id } : op);
+    const partMeta = { ...doc.partMeta };
+    if (partMeta[oldId]) partMeta[next.id] = partMeta[oldId];
+    const partMaps = { ...doc.partMaps };
+    if (partMaps[oldId]) {
+      partMaps[next.id] = partMaps[oldId];
+      delete partMaps[oldId];
+    }
+    return {
+      ...doc,
+      sources: doc.sources.map((s) => (s.id === oldId ? next : s)),
+      operations: doc.operations.map(retarget),
+      partMeta,
+      partMaps,
+    };
+  },
+});
+
+/**
  * Imported mesh a part comes from, following its cuts back through the history (a piece of a
  * piece of the figure → the figure). Null for parts that are not made from a mesh (loose pins).
  */

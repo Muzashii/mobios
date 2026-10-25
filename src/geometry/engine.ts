@@ -70,6 +70,11 @@ export class Engine {
     return this.sources.has(id);
   }
 
+  /** The imported solid behind a source id (before any operation). */
+  source(id: PartId): Manifold | undefined {
+    return this.sources.get(id)?.m;
+  }
+
   evaluate(sources: SourceRef[], ops: Operation[], full = false): EvalResult {
     const t0 = performance.now();
     const baseKey = JSON.stringify(sources);

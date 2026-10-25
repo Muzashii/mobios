@@ -1,20 +1,22 @@
 import fs from 'node:fs';
 import { it } from 'vitest';
 import { buildPartMap } from '../../src/geometry/segment/parts';
-import { FIGURE_PARTS, hasLab, picker, readMesh, writeLabels } from './common';
+import { FIGURE_PARTS, LAB, picker, readMesh, writeLabels } from './common';
 
 /**
  * Stage 0 metric on the real test figure (.lab/, never committed): for each expected part, the
  * part under the click must contain every "include" point and none of the "exclude" points.
  * Appends the score to .lab/partmap-scores.txt.
  */
-it.skipIf(!hasLab)('part map on the test figure', () => {
-  const mesh = readMesh(process.env.MESH ?? 'p60000');
+const MESH = process.env.MESH ?? 'p60000';
+it.skipIf(!fs.existsSync(`${LAB}/${MESH}.pos.bin`))('part map on the test figure', () => {
+  const mesh = readMesh(MESH);
   const t = performance.now();
   const map = buildPartMap(mesh);
   const ms = performance.now() - t;
   console.log('timings', JSON.stringify(map.timings), 'regions', map.regions.length, 'parts', map.parts.length);
   for (const q of map.parts) console.log(q.id, q.name.padEnd(16), `${q.area.toFixed(0)}mm²`, `t=${q.thickness.toFixed(1)}`, q.regions.map((r) => map.regions[r].role[0] + r).join(','));
+  if (process.env.REG) for (const [i, r] of map.regions.map((r, i) => [i, r] as const).sort((a, b) => b[1].area - a[1].area)) console.log(`  r${i} ${r.role} part ${r.part} ${r.area.toFixed(0)}mm² t=${r.thickness.toFixed(1)} c=${r.centroid.map((v) => v.toFixed(0)).join(',')}`);
   const pick = picker(mesh);
   const partAt = (ray: [number[], number[]]) => {
     const h = pick(ray[0] as [number, number, number], ray[1] as [number, number, number]);

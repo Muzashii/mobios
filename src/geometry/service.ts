@@ -106,6 +106,18 @@ export class GeometryService {
     });
   }
 
+  /**
+   * Raio-X of a mesh already in the project (the user asked for "Reparar malha"): the current
+   * source is inspected like a fresh file; `finishImport(id)` then builds the repaired version.
+   */
+  inspectSource(sourceId: string, id: string, name: string, tech: Technology, buildVolume?: Vec3): InspectionReport {
+    const m = this.engine.source(sourceId);
+    if (!m) throw new Error('Malha não encontrada.');
+    const mesh = manifoldToMeshData(m);
+    this.pending.set(id, { name, positions: mesh.positions, indices: mesh.indices });
+    return inspectMesh(id, name, mesh.positions, mesh.indices, { technology: tech, buildVolume });
+  }
+
   /** Applies the chosen repairs and registers the result as source(s). */
   finishImport(id: string, plan: RepairPlan): RepairOutcome {
     const raw = this.pending.get(id);

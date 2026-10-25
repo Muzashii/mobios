@@ -64,7 +64,7 @@ export function XRayPanel() {
   return (
     <div className="flex h-full flex-col" data-testid="xray">
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <Section title="Raio-X da malha" aside={x.reports.length > 1 ? <span className="text-[11px] text-muted">{x.index + 1} de {x.reports.length}</span> : undefined}>
+        <Section title={x.repairOf ? 'Reparar malha' : 'Raio-X da malha'} aside={x.reports.length > 1 ? <span className="text-[11px] text-muted">{x.index + 1} de {x.reports.length}</span> : undefined}>
           <div className="flex items-center justify-between gap-2">
             <span className="truncate text-sm font-medium">{r.name}</span>
             <span className={cx('shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium', grade.className)}>{grade.label}</span>
@@ -113,10 +113,10 @@ export function XRayPanel() {
       </div>
       <div className="flex gap-2 border-t border-line p-3">
         <Button variant="ghost" className="flex-1" disabled={busy} onClick={() => void skipXRay()}>
-          <IconX size={15} /> Não importar
+          <IconX size={15} /> {x.repairOf ? 'Cancelar' : 'Não importar'}
         </Button>
-        <Button variant="primary" className="flex-1" disabled={busy} onClick={() => void applyXRay()} data-testid="xray-apply">
-          <IconCheck size={15} /> {actionable ? (changed ? 'Reparar e importar' : 'Reparar tudo (recomendado)') : 'Importar'} <Kbd>Enter</Kbd>
+        <Button variant="primary" className="flex-1" disabled={busy || (!!x.repairOf && !actionable)} onClick={() => void applyXRay()} data-testid="xray-apply">
+          <IconCheck size={15} /> {x.repairOf ? 'Aplicar reparo' : actionable ? (changed ? 'Reparar e importar' : 'Reparar tudo (recomendado)') : 'Importar'} <Kbd>Enter</Kbd>
         </Button>
       </div>
     </div>

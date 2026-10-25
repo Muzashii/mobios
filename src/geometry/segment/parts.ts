@@ -674,6 +674,8 @@ const SIMILAR = 0.7;
 const SEAM = 0.6;
 /** Depth / attachment radius under which a surrounded part is a patch of its surroundings. */
 const PATCH = 0.6;
+/** Thicker-than ratio of a body a thin sheet hangs from (long hair below a head). */
+const SHEET = 3;
 /** Thickest next segment a limb extremity joins (hand → forearm). */
 const LIMB = 2.5;
 
@@ -938,6 +940,9 @@ function fuse(topo: Topology, faceRegion: Int32Array, g: RegionGraph, siblings: 
       if (find(r) !== r || longThin(r)) continue;
       const own = significant(r);
       if (own.length >= 3) continue; // a junction is never an extremity
+      // A distal segment has one thicker neighbour, the next one towards the body (a base under
+      // two legs has two).
+      if (own.filter(([n]) => thick(n) > thick(r)).length > 1) continue;
       const next = own.filter(([n]) => thick(n) > thick(r) && thick(n) <= thick(r) * LIMB && significant(n).length < 3);
       if (!next.length) continue;
       const to = next.reduce((x, y) => (y[1].length > x[1].length ? y : x));
@@ -947,7 +952,32 @@ function fuse(topo: Topology, faceRegion: Int32Array, g: RegionGraph, siblings: 
     if (!changed) break;
   }
 
-  // 5. Leftover crumbs (< 2% of the surface, not an accessory) join the neighbour they share most
+  let floorZ = Infinity, topZ = -Infinity;
+  for (let f = 0; f < faceRegion.length; f++) {
+    floorZ = Math.min(floorZ, cells.c[f * 3 + 2]);
+    topZ = Math.max(topZ, cells.c[f * 3 + 2]);
+  }
+  /** Reaches the bottom of the figure (legs, a base): it stands, it does not hang. */
+  const standsOnFloor = (root: number) => facesOf(root).some((f) => cells.c[f * 3 + 2] < floorZ + (topZ - floorZ) * 0.05);
+  // 5. Sheet continuations: a much thinner part hanging from a body along a long edge (long hair
+  // below a head: 3.7–7× thinner) is that body going on. A cane in a fist (2.6×), legs on the
+  // floor, an arm on a torso barely thicker than it: none of them qualifies.
+  for (let pass = 0; pass < 4; pass++) {
+    let changed = false;
+    for (const r of roots()) {
+      if (find(r) !== r) continue;
+      const nb = [...partBorders(r, false).entries()];
+      if (!nb.length) continue;
+      // The thickest neighbour it hangs from (its own thinner tips may border it as well).
+      const [q, e] = nb.reduce((x, y) => (thick(y[0]) > thick(x[0]) ? y : x));
+      if (standsOnFloor(r) || thick(q) < thick(r) * SHEET || e.length < 8 * thick(r) || keptApart(r, q)) continue;
+      union(r, q, 'relief');
+      changed = true;
+    }
+    if (!changed) break;
+  }
+
+  // 6. Leftover crumbs (< 2% of the surface, not an accessory) join the neighbour they share most
   // border with; degenerate slivers with no border at all join the biggest part.
   for (let pass = 0; pass < 8; pass++) {
     let changed = false;
@@ -1113,7 +1143,6 @@ function nameParts(parts: MapPart[], g: RegionGraph, regions: PartRegion[], lo: 
   const legsOf = (q: MapPart) => parts.filter((x) => !named.has(x.id) && floor(x) && adj[q.id].has(x.id)).length;
   const torso = big.sort((a, b) => legsOf(b) - legsOf(a) || adj[b.id].size - adj[a.id].size || b.area - a.area)[0];
   if (torso) set(torso, 'Tronco');
-  const tz = torso ? torso.centroid[2] : lo[2] + H / 2;
   const tx = torso ? torso.centroid[0] : (lo[0] + hi[0]) / 2;
   const halfWidth = torso ? (torso.max[0] - torso.min[0]) / 2 : W / 2;
   const side = (q: MapPart) => (q.centroid[0] > tx ? 'esquerdo' : 'direito');
@@ -1126,15 +1155,21 @@ function nameParts(parts: MapPart[], g: RegionGraph, regions: PartRegion[], lo: 
     set(head, 'Cabeça');
     for (const q of parts) if (!named.has(q.id) && adj[q.id].has(head.id) && q.centroid[2] > head.centroid[2]) set(q, 'Chapéu');
   }
+  // Something on the floor covering both sides of the body is a skirt or trousers; what is under
+  // it, the feet.
+  const spansBoth = (q: MapPart) => Math.abs(q.centroid[0] - tx) < halfWidth * 0.25 && q.min[0] < tx - halfWidth * 0.5 && q.max[0] > tx + halfWidth * 0.5;
   for (const q of parts) {
     if (named.has(q.id)) continue;
     const touchesTorso = torso && adj[q.id].has(torso.id);
+    const touchesHead = head && adj[q.id].has(head.id);
     const elong = (q.max[2] - q.min[2]) / Math.max(1e-6, Math.max(q.max[0] - q.min[0], q.max[1] - q.min[1]));
-    if (touchesTorso && floor(q)) set(q, `Perna ${sideF(q)}`);
-    // Arms hang beside the torso (a scarf or a collar sits in front of it).
-    else if (touchesTorso && q.max[2] > tz && Math.abs(q.centroid[0] - tx) > halfWidth * 0.4) set(q, `Braço ${side(q)}`);
+    if (touchesTorso && floor(q)) set(q, spansBoth(q) ? 'Parte de baixo' : `Perna ${sideF(q)}`);
+    // Arms hang beside the torso (a scarf or a collar sits in front of it); under long hair the
+    // shoulder may only touch the head.
+    else if ((touchesTorso || touchesHead) && !floor(q) && q.max[2] > (torso?.min[2] ?? -Infinity) && Math.abs(q.centroid[0] - tx) > halfWidth * 0.4) set(q, `Braço ${side(q)}`);
     else if (q.thickness < (torso?.thickness ?? Infinity) * 0.35 && Math.max(elong, 1 / elong) > 2.5) set(q, 'Acessório');
   }
+  for (const q of parts) if (!named.has(q.id) && floor(q) && q.max[2] < lo[2] + H * 0.2) set(q, spansBoth(q) ? 'Pés' : `Pé ${side(q)}`);
   let n = 1;
   for (const q of parts) if (!named.has(q.id)) set(q, `Parte ${n++}`);
   // Disambiguate repeated names.
