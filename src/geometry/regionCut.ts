@@ -369,11 +369,11 @@ export interface RegionCutResult {
 
 /**
  * Cut along the border of detected parts: B = the automatic parts under `partSeeds`, from the
- * part map of this exact solid. The border gets the smoothed joint line and a cap like any
+ * part map of this exact solid (or of `mapSource`, an earlier piece it was cut from). The border gets the smoothed joint line and a cap like any
  * region cut; if no cap closes, a plane fitted to the border cuts instead.
  */
-function cutDetectedParts(wasm: Wasm, part: Manifold, ctx: RegionContext, op: RegionCutOperation): RegionCutResult {
-  const parts = partLabelsOn(part, ctx.mesh);
+function cutDetectedParts(wasm: Wasm, part: Manifold, ctx: RegionContext, op: RegionCutOperation, mapSource?: Manifold): RegionCutResult {
+  const parts = partLabelsOn(mapSource ?? part, ctx.mesh);
   const want = new Set<number>();
   const seedFaces: number[] = [];
   for (const s of op.partSeeds!) {
@@ -593,14 +593,18 @@ function cleanLabels(ctx: RegionContext, labels: Uint8Array, seedFaces: number[]
   const keep = new Set(seedFaces.map((f) => comp[f]));
   // The body is the piece of A made of the most detected parts (torso, head, arms…); pieces
   // that are one part hanging only from B (a hat on a head, feet under a skirt) leave with it.
-  // Size does not decide: a hat can have more surface than the rest of a small figure.
+  // Size does not decide: a hat can have more surface than the rest of a small figure. A part
+  // counts only with real surface in the piece (≥ 1% of the whole): slivers and the caps of
+  // earlier cuts carry stray labels.
   let mainA: (typeof comps)[number] | undefined;
   let best = -1;
+  const total = ctx.topo.totalArea;
   for (const c of comps) {
     if (c.side !== 0) continue;
-    const kinds = new Set<number>();
-    for (const f of c.faces) kinds.add(parts[f]);
-    const score = kinds.size * 1e12 + c.area;
+    const byKind = new Map<number, number>();
+    for (const f of c.faces) byKind.set(parts[f], (byKind.get(parts[f]) ?? 0) + fArea[f]);
+    const kinds = [...byKind.values()].filter((a) => a >= total * 0.01).length;
+    const score = kinds * 1e12 + c.area;
     if (score > best) {
       best = score;
       mainA = c;
@@ -634,8 +638,8 @@ function toSolids(wasm: Wasm, part: Manifold, split: RegionSplit, shell: boolean
  * Executes a `cut-region` operation on a part. The region is recomputed from the stored
  * balls and level on this exact mesh; `ctx` must be built from `part`'s mesh.
  */
-export function cutRegion(wasm: Wasm, part: Manifold, ctx: RegionContext, op: RegionCutOperation): RegionCutResult {
-  if (op.partSeeds?.length) return cutDetectedParts(wasm, part, ctx, op);
+export function cutRegion(wasm: Wasm, part: Manifold, ctx: RegionContext, op: RegionCutOperation, mapSource?: Manifold): RegionCutResult {
+  if (op.partSeeds?.length) return cutDetectedParts(wasm, part, ctx, op, mapSource);
   const field = regionField(ctx, op.balls, op.seeds, op.negSeeds);
   const labelsAt = (level: number) => labelFaces(ctx, field, level, Math.max(ctx.edge * 2, Math.min(level * 0.35, ctx.diag * 0.05)));
   const warnings: string[] = [];

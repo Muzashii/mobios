@@ -3,6 +3,8 @@ import { create } from 'zustand';
 import type { PartMapResult, Bounds, ConnectorParams, ConnectorType, CutCheck, CutProfile, InspectionReport, JointInfo, OpReport, PartId, PartStats, Plane, RegionBall, RegionCutMode, RepairPlan, SmartCutCandidate, StrokeFrame, Vec2, Vec3 } from '../geometry/types';
 
 export type Tool = 'select' | 'cut' | 'paint' | 'brush' | 'draw';
+/** Step of the flow shown in the side panel: model → split → fit → colours. */
+export type Step = 'model' | 'split' | 'fit' | 'color';
 
 export interface ConnectorDraft {
   enabled: boolean;
@@ -31,6 +33,8 @@ export interface RegionDraft {
   name: string;
   /** Cut by detected parts (SmartCut hover): points on the parts that leave. */
   partSeeds?: Vec3[];
+  /** Parts come from this earlier piece's map (a "Separar em N peças" chain). */
+  mapFrom?: PartId;
 }
 
 export interface CutDraft {
@@ -40,6 +44,8 @@ export interface CutDraft {
   region?: RegionDraft;
   /** Other SmartCut clusters to cut in the same commit (dabs on head and hand → 2 cuts). */
   batch?: RegionDraft[];
+  /** Name for what is left after the whole batch ("Separar em N peças": the body's part). */
+  restName?: string;
   plane: Plane;
   profile: CutProfile | null;
   surface?: SurfaceDraft;
@@ -127,6 +133,7 @@ export interface XRayState {
 }
 
 interface UIState {
+  step: Step;
   tool: Tool;
   brush: BrushState;
   /** SmartCut: free brush instead of picking detected parts. */
@@ -166,7 +173,13 @@ interface UIState {
   ready: boolean;
 }
 
+/** Piece the split step works on: the selection, or the only visible piece. */
+export function splitTarget(s: Pick<UIState, 'selection' | 'parts'>): PartId | null {
+  return s.selection ?? (s.parts.filter((p) => !p.id.endsWith('.pins')).length === 1 ? s.parts.find((p) => !p.id.endsWith('.pins'))!.id : null);
+}
+
 export const useUI = create<UIState>(() => ({
+  step: 'model',
   tool: 'select',
   brush: { target: null, seeds: [], negSeeds: [], radius: 4 },
   brushAdvanced: false,

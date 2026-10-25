@@ -103,7 +103,7 @@ function CameraRig() {
   }, []);
 
   // Brush and free-hand tools own the left button; orbit moves to the right button.
-  const tool = useUI((s) => s.tool);
+  const tool = useUI((s) => (s.tool === 'brush' && !s.brushAdvanced ? 'select' : s.tool));
   useEffect(() => {
     const c = controls.current;
     if (!c) return;

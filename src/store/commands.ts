@@ -174,8 +174,8 @@ export const setFilament = (slot: number, color: string): Command => ({
 });
 
 const editMap = (doc: ProjectDoc, id: PartId, fn: (e: PartMapEdits) => PartMapEdits): ProjectDoc => {
-  const cur = doc.partMaps?.[id];
-  return cur ? { ...doc, partMaps: { ...doc.partMaps, [id]: fn(cur) } } : doc;
+  const cur = doc.partMaps?.[id] ?? { names: {}, merged: {} };
+  return { ...doc, partMaps: { ...doc.partMaps, [id]: fn(cur) } };
 };
 
 /** Shows (or hides, keeping nothing) the automatic part map of a part. */

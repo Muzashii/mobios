@@ -5,7 +5,7 @@ import { focus, setUI, useUI } from '../store/ui';
 import { cx } from '../ui/components';
 import { IconAlert, IconEye, IconEyeOff, IconLock, IconTrash, IconUnlock } from '../ui/icons';
 import { deleteSelectedModel } from './commands';
-import { fitsPrinter } from '../features/analysis/PartInspector';
+import { fitsPrinter } from '../features/steps/ModelStep';
 import { partColor } from '../features/paint/colors';
 
 export function Outliner() {
@@ -16,13 +16,13 @@ export function Outliner() {
   const printer = printerOf(doc);
 
   return (
-    <section aria-label="Partes" className="flex min-h-0 flex-1 flex-col">
+    <section aria-label="Peças" className="flex min-h-0 flex-1 flex-col">
       <header className="flex h-10 shrink-0 items-center justify-between px-3">
-        <h2 className="text-[13px] font-semibold text-text">Partes</h2>
+        <h2 className="text-[13px] font-semibold text-text">Peças</h2>
         <span className="num rounded-full bg-surface-3 px-1.5 text-[11px] text-muted">{parts.length}</span>
       </header>
-      {parts.length === 0 && <p className="px-3 py-2 text-xs text-muted">Nenhuma parte ainda.</p>}
-      <ul className="min-h-0 flex-1 overflow-y-auto py-1" aria-label="Lista de partes">
+      {parts.length === 0 && <p className="px-3 py-2 text-xs text-muted">Nenhuma peça ainda.</p>}
+      <ul className="min-h-0 flex-1 overflow-y-auto py-1" aria-label="Lista de peças">
         {parts.map((p) => {
           const meta = doc.partMeta[p.id] ?? {};
           const hidden = meta.visible === false;

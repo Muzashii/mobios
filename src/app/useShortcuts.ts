@@ -39,7 +39,7 @@ export function useShortcuts() {
         }
         return;
       }
-      if (tool === 'brush') {
+      if (tool === 'brush' && useUI.getState().brushAdvanced) {
         if (e.key === 'Enter') {
           e.preventDefault();
           void suggestFromBrush();
@@ -70,7 +70,7 @@ export function useShortcuts() {
         runCommand('delete');
         return;
       }
-      const single: Record<string, string> = { c: 'cut', s: 'smartcut', b: 'brush', l: 'draw', t: 'paint', v: 'select', e: 'explode', f: 'focus', h: 'hide', m: 'assembly' };
+      const single: Record<string, string> = { c: 'cut', s: 'smartcut', b: 'brush', l: 'draw', t: 'paint', v: 'select', e: 'explode', f: 'focus', h: 'hide', m: 'assembly', '1': 'step-model', '2': 'step-split', '3': 'step-fit', '4': 'step-color' };
       if (single[key]) {
         e.preventDefault();
         runCommand(single[key]);
@@ -79,8 +79,8 @@ export function useShortcuts() {
         // Connector: open the newest connector, or start a cut (which adds one).
         const ops = useHistory.getState().doc.operations;
         const last = [...ops].reverse().find((o) => o.kind === 'connector');
-        if (last) setUI({ connectorEdit: last.id, selection: null });
-        else runCommand('cut');
+        if (last) setUI({ connectorEdit: last.id, selection: null, step: 'fit' });
+        else runCommand('step-fit');
       }
     };
     window.addEventListener('keydown', onKey);

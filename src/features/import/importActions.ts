@@ -31,6 +31,8 @@ async function registerImported(list: ImportedMesh[], label: string, repair?: st
   for (const m of list) await saveMesh(m.id, m.mesh);
   const wasEmpty = getDoc().sources.length === 0;
   dispatch(addSources(list.map(({ id, name }) => ({ id, name, ...(repair ? { repair } : {}) }))));
+  // A first model goes straight to splitting: its parts start being recognised right away.
+  if (wasEmpty && !list[0]?.id.startsWith('cal')) setUI({ step: 'split' });
   if (repair !== undefined) {
     if (wasEmpty) setTimeout(() => focus('all'), 50);
     toast('success', label, repair, 7000);
@@ -195,7 +197,7 @@ export async function openExample() {
   setUI({ busy: true, busyLabel: 'Gerando exemplo…' });
   try {
     const m = await geometry().example(newId('s'));
-    await registerImported([m], 'Exemplo carregado — selecione a figura e pressione C para cortar');
+    await registerImported([m], 'Exemplo carregado — passe o mouse para ver as partes');
   } finally {
     setUI({ busy: false });
   }

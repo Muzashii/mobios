@@ -96,12 +96,15 @@ async function apply(results: Awaited<ReturnType<ReturnType<typeof geometry>['ev
   });
   for (const gone of byId.values()) gone.geometry.dispose();
 
-  // Surface new problems once.
+  // Surface new problems once; many at once (a whole split) become one summary.
+  const errors: string[] = [], warnings: string[] = [];
   for (const [opId, rep] of Object.entries(reports)) {
     const before = prev.reports[opId];
-    if (rep.error && rep.error !== before?.error) toast('error', 'Operação com erro', rep.error, 6000);
-    else if (rep.warnings.length && rep.warnings.join() !== before?.warnings.join()) toast('warning', 'Atenção', rep.warnings.join(' '), 6000);
+    if (rep.error && rep.error !== before?.error) errors.push(rep.error);
+    else if (rep.warnings.length && rep.warnings.join() !== before?.warnings.join()) warnings.push(rep.warnings.join(' '));
   }
+  if (errors.length) toast('error', errors.length > 1 ? `${errors.length} operações com erro` : 'Operação com erro', errors.length > 1 ? `${errors[0]} Veja o Histórico.` : errors[0], 6000);
+  if (warnings.length) toast('warning', warnings.length > 1 ? `${warnings.length} avisos` : 'Atenção', warnings.length > 1 ? `${warnings[0]} Os outros estão no Histórico.` : warnings[0], 6000);
 
   const ids = new Set(next.map((p) => p.id));
   useUI.setState({

@@ -106,6 +106,7 @@ export function PartMapMesh({
         interactive
           ? (e) => {
               e.stopPropagation();
+              if (e.delta > 4) return; // the end of an orbit drag, not a click
               const group = pick(e.faceIndex);
               if (onPick && group !== null) onPick(e.point.clone().sub(e.object.position).toArray() as Vec3, group);
               else setUI({ selection: part.id, connectorEdit: null });

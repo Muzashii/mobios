@@ -179,10 +179,19 @@ export class Engine {
   }
 
   /** Runs any cut operation; returns the two halves and the joint geometry. */
+  /** The latest state (already computed) holding this part: the piece a chain of cuts started from. */
+  private earlierPart(id: PartId): Manifold | undefined {
+    for (let i = this.steps.length - 1; i >= 0; i--) {
+      const p = this.steps[i].state.parts.get(id);
+      if (p) return p.m;
+    }
+    return this.base?.parts.get(id)?.m;
+  }
+
   private cutGeometry(target: Manifold, op: CutOperation): { a: Manifold; b: Manifold; planar: boolean; plane: Plane; insertDir: Vec3; faceRadius?: number; warnings: string[] } {
     if (op.kind === 'cut-region') {
       const ctx = regionContext(target, 'apply');
-      const r = cutRegion(this.wasm, target, ctx, op);
+      const r = cutRegion(this.wasm, target, ctx, op, op.mapFrom ? this.earlierPart(op.mapFrom) : undefined);
       return { a: r.a, b: r.b, planar: r.planar, plane: r.plane, insertDir: r.plane.normal, faceRadius: r.faceRadius, warnings: r.warnings };
     }
     if (op.kind === 'cut-surface') {

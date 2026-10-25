@@ -6,10 +6,9 @@ import { useHistory } from '../store/history';
 import { useUI } from '../store/ui';
 import { ViewportBoundary } from './ViewportBoundary';
 import { Inspector } from './Inspector';
-import { Onboarding } from './Onboarding';
 import { Outliner } from './Outliner';
 import { AssemblyBar, BusyPill, CommandPalette, DropOverlay, EmptyState, ExplodeSlider, Toasts, ToolHint } from './Overlays';
-import { Toolbar } from './Toolbar';
+import { ViewControls } from './ViewControls';
 import { TopBar } from './TopBar';
 import { useShortcuts } from './useShortcuts';
 
@@ -39,14 +38,14 @@ export function App() {
         >
           Pular para o painel de propriedades
         </a>
-        <div className="grid h-full grid-cols-[248px_minmax(0,1fr)_312px] grid-rows-[48px_minmax(0,1fr)] bg-bg max-md:grid-cols-[minmax(0,1fr)] max-md:grid-rows-[48px_minmax(0,1fr)_40vh]">
-          <div className="col-span-3 max-md:col-span-1">
+        {/* Left: what to do now (the step). Centre: the model. Right: what you have (pieces, history). */}
+        <div className="grid h-full grid-cols-[320px_minmax(0,1fr)_256px] grid-rows-[52px_minmax(0,1fr)] bg-bg max-lg:grid-cols-[300px_minmax(0,1fr)] max-md:grid-cols-[minmax(0,1fr)] max-md:grid-rows-[52px_minmax(0,1fr)_42vh]">
+          <div className="col-span-3 max-lg:col-span-2 max-md:col-span-1">
             <TopBar />
           </div>
-          <aside aria-label="Projeto" className="flex min-h-0 flex-col border-r border-line bg-surface max-md:hidden">
-            <Outliner />
-            <HistoryPanel />
-          </aside>
+          <div className="min-h-0 border-r border-line max-md:order-last max-md:border-r-0 max-md:border-t">
+            <Inspector />
+          </div>
           <main className="relative overflow-hidden" aria-label="Viewport 3D">
             {hasModel ? (
               <Suspense fallback={<div className="shimmer absolute inset-0" />}>
@@ -65,17 +64,17 @@ export function App() {
             )}
             <div className="pointer-events-none absolute inset-0">
               <EmptyState />
-              <Onboarding />
               <ToolHint />
               <BusyPill />
               <ExplodeSlider />
               <AssemblyBar />
-              <Toolbar />
+              <ViewControls />
             </div>
           </main>
-          <div className="min-h-0 max-md:border-t max-md:border-line">
-            <Inspector />
-          </div>
+          <aside aria-label="Projeto" className="flex min-h-0 flex-col border-l border-line bg-surface max-lg:hidden">
+            <Outliner />
+            <HistoryPanel />
+          </aside>
         </div>
         <DropOverlay />
         <Toasts />

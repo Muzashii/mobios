@@ -2,11 +2,11 @@ import { exportParts, saveProjectFile } from '../features/export/exportActions';
 import { exportAssemblyGuide } from '../features/export/assemblyGuide';
 import { autoSplitPart } from '../features/analysis/PrintPrep';
 import { addCalibration, newProject, openExample, openFilePicker } from '../features/import/importActions';
-import { startBrush, startCut, startDraw } from '../features/cut/cutActions';
+import { cancelCut, startBrush, startCut, startDraw } from '../features/cut/cutActions';
 import { removeSource, setPartMeta, sourceOf } from '../store/commands';
 import { dispatch, useHistory } from '../store/history';
 import { saveDocNow } from '../store/persistence';
-import { focus, setUI, toast, useUI } from '../store/ui';
+import { focus, setUI, toast, useUI, type Step } from '../store/ui';
 
 export interface AppCommand {
   id: string;
@@ -66,6 +66,12 @@ export function deleteSelectedModel(part = useUI.getState().selection) {
   toast('success', `${name} excluído`, 'Ctrl+Z desfaz.');
 }
 
+/** Opens a step of the flow in the side panel, closing whatever task was open. */
+export function goToStep(step: Step) {
+  cancelCut();
+  setUI({ step, tool: 'select', brushAdvanced: false, connectorEdit: null, mapHover: null });
+}
+
 /** Single registry: drives the command palette (Ctrl+K) and documents shortcuts. */
 export const APP_COMMANDS: AppCommand[] = [
   { id: 'open', label: 'Abrir modelo (STL, OBJ, 3MF, .mobios)', shortcut: 'Ctrl+O', group: 'Arquivo', run: () => void openFilePicker() },
@@ -89,10 +95,23 @@ export const APP_COMMANDS: AppCommand[] = [
   },
   { id: 'cut', label: 'Corte por plano', shortcut: 'C', group: 'Ferramentas', run: () => startCut() },
   { id: 'select', label: 'Selecionar', shortcut: 'V', group: 'Ferramentas', run: () => setUI({ tool: 'select' }) },
-  { id: 'smartcut', label: 'SmartCut — pincelar região e sugerir corte', shortcut: 'S', group: 'Ferramentas', run: () => startBrush() },
-  { id: 'brush', label: 'Pincel de seleção', shortcut: 'B', group: 'Ferramentas', run: () => startBrush() },
+  { id: 'step-model', label: 'Etapa 1 — Modelo', shortcut: '1', group: 'Etapas', run: () => goToStep('model') },
+  { id: 'step-split', label: 'Etapa 2 — Separar', shortcut: '2', group: 'Etapas', run: () => goToStep('split') },
+  { id: 'step-fit', label: 'Etapa 3 — Encaixes', shortcut: '3', group: 'Etapas', run: () => goToStep('fit') },
+  { id: 'step-color', label: 'Etapa 4 — Cores', shortcut: '4', group: 'Etapas', run: () => goToStep('color') },
+  { id: 'smartcut', label: 'Separar por parte (apontar e clicar)', shortcut: 'S', group: 'Ferramentas', run: () => startBrush() },
+  {
+    id: 'brush',
+    label: 'Corte com pincel',
+    shortcut: 'B',
+    group: 'Ferramentas',
+    run: () => {
+      startBrush();
+      setUI({ brushAdvanced: true });
+    },
+  },
   { id: 'draw', label: 'Corte por curva livre', shortcut: 'L', group: 'Ferramentas', run: () => startDraw() },
-  { id: 'paint', label: 'Pintar partes (slots de filamento)', shortcut: 'T', group: 'Ferramentas', run: () => setUI({ tool: 'paint', draft: null }) },
+  { id: 'paint', label: 'Pintar peças (slots de filamento)', shortcut: 'T', group: 'Ferramentas', run: () => setUI({ tool: 'paint', step: 'color', draft: null }) },
   { id: 'assembly', label: 'Simular montagem (animação)', shortcut: 'M', group: 'Visualizar', run: toggleAssembly },
   { id: 'explode', label: 'Alternar vista explodida', shortcut: 'E', group: 'Visualizar', run: toggleExplode },
   { id: 'focus', label: 'Focar seleção / tudo', shortcut: 'F', group: 'Visualizar', run: () => focus(useUI.getState().selection ?? 'all') },

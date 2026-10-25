@@ -125,6 +125,12 @@ export interface RegionCutOperation {
    * the part map of the target (recomputed on re-execution). Balls and level are then unused.
    */
   partSeeds?: Vec3[];
+  /**
+   * Take the parts from the map of this earlier piece instead (labels carried onto the target).
+   * "Separar em N peças" cuts a chain of pieces; the map of what is left after each cut would no
+   * longer see the parts the user chose.
+   */
+  mapFrom?: PartId;
   /** Points that must stay in A (Shift + brush). */
   negSeeds?: Vec3[];
   /** Geodesic distance (mm) of the ring from the seed region. */
@@ -171,6 +177,8 @@ export interface AutoPart {
   /** Share of the surface (0–1). */
   share: number;
   centroid: Vec3;
+  /** Parts sharing an edge with this one. */
+  touches: number[];
 }
 
 /** Part map of one part: a label per triangle of its display mesh (same order) and the parts. */

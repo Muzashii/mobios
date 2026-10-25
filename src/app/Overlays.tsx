@@ -16,7 +16,7 @@ export function ExplodeSlider() {
   const assembling = useUI((s) => s.assembly !== null);
   if (count < 2 || assembling) return null;
   return (
-    <div className="pointer-events-auto absolute bottom-[4.75rem] left-1/2 flex w-72 -translate-x-1/2 items-center gap-3 rounded-full border border-line bg-surface/90 px-4 py-2 shadow-panel backdrop-blur">
+    <div className="pointer-events-auto absolute bottom-4 left-1/2 flex w-72 -translate-x-1/2 items-center gap-3 rounded-full border border-line bg-surface/90 px-4 py-2 shadow-panel backdrop-blur">
       <span className="text-[11px] text-muted">Explodir</span>
       <Slider label="Vista explodida" value={explode} min={0} max={1} step={0.01} onChange={(v) => setUI({ explode: v })} />
       <span className="num w-9 text-right text-[11px]">{Math.round(explode * 100)}%</span>
@@ -52,7 +52,7 @@ export function AssemblyBar() {
   const colliding = checked.filter((j) => j.assemblyClear === false);
   const current = activeJoint(joints, progress);
   return (
-    <div className="pointer-events-auto absolute bottom-[4.75rem] left-1/2 flex w-[30rem] max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col gap-1.5 rounded-xl border border-line bg-surface/90 px-4 py-2.5 shadow-panel backdrop-blur" data-testid="assembly-bar">
+    <div className="pointer-events-auto absolute bottom-4 left-1/2 flex w-[30rem] max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col gap-1.5 rounded-xl border border-line bg-surface/90 px-4 py-2.5 shadow-panel backdrop-blur" data-testid="assembly-bar">
       <div className="flex items-center gap-3">
         <button
           aria-label={playing ? 'Pausar' : 'Reproduzir'}
@@ -105,7 +105,7 @@ export function ToolHint() {
   const tool = useUI((s) => s.tool);
   const brushAdvanced = useUI((s) => s.brushAdvanced);
   const draft = useUI((s) => s.draft);
-  const selection = useUI((s) => s.selection);
+  const step = useUI((s) => s.step);
   const count = useUI((s) => s.parts.length);
   const ops = useHistory((s) => s.doc.operations.length);
   const filaments = useHistory((s) => s.doc.filaments);
@@ -133,12 +133,12 @@ export function ToolHint() {
     );
   }
   let text: React.ReactNode = null;
-  if (tool === 'brush') text = brushAdvanced ? <>Pincele com o botão esquerdo · gire com o direito · <Kbd>Enter</Kbd> sugere o corte</> : <>Passe o mouse sobre uma parte · clique para cortá-la · gire com o botão direito</>;
+  if (tool === 'brush' && brushAdvanced) text = <>Pincele com o botão esquerdo · gire com o direito · <Kbd>Enter</Kbd> sugere o corte</>;
+  else if (step === 'split' && !draft && (tool === 'select' || tool === 'brush')) text = count ? <>Passe o mouse para ver cada parte · clique numa parte para separá-la</> : null;
   else if (tool === 'draw') text = <>Desenhe um traço atravessando a peça · <Kbd>Esc</Kbd> cancela</>;
-  else if (draft?.mode === 'surface') text = <><Kbd>Enter</Kbd> corta · <Kbd>Esc</Kbd> cancela</>;
+  else if (draft?.mode === 'surface' || draft?.mode === 'region') text = <><Kbd>Enter</Kbd> corta · <Kbd>Esc</Kbd> cancela</>;
   else if (draft) text = <>Arraste as setas para mover e os arcos para girar · <Kbd>Enter</Kbd> corta · <Kbd>Esc</Kbd> cancela</>;
-  else if (count > 0 && !selection && ops === 0) text = <>Clique numa parte e pressione <Kbd>C</Kbd> para cortar</>;
-  else if (selection && ops === 0) text = <>Pressione <Kbd>C</Kbd> para cortar esta parte</>;
+  else if (count > 0 && ops === 0 && step === 'model') text = <>Tudo certo? Vá para <strong className="text-text">2 · Separar</strong> para dividir o modelo</>;
   if (!text) return null;
   return <div className="absolute left-1/2 top-3 -translate-x-1/2 rounded-full border border-line bg-surface/85 px-3 py-1 text-xs text-muted shadow-panel backdrop-blur">{text}</div>;
 }

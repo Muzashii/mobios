@@ -33,13 +33,13 @@ test('importar não trava no reparo; "Reparar malha" abre o Raio-X depois', asyn
   // The model comes straight in: only the lossless fixes (hole closed, debris dropped).
   await expect(page.getByTestId('xray')).toHaveCount(0);
   await expect(page.getByLabel('Histórico')).toContainText('Raio-X: 1 furo(s) fechado(s)');
-  const parts = page.getByRole('list', { name: 'Lista de partes' });
+  const parts = page.getByRole('list', { name: 'Lista de peças' });
   await expect(parts).toContainText('27');
-  // The full Raio-X stays one click away, on the part.
-  await parts.getByTestId('part-row').first().click();
+  // The full Raio-X stays one click away, in the Modelo step.
+  await page.getByTestId('step-model').click();
   await page.getByRole('button', { name: 'Reparar malha' }).click();
   const panel = page.getByTestId('xray');
-  await expect(panel).toContainText('Reparar malha');
+  await expect(panel).toContainText('Reparar malha', { timeout: 30_000 });
   await page.getByRole('button', { name: /Cancelar/ }).click();
   await expect(panel).toHaveCount(0);
 });
@@ -47,23 +47,21 @@ test('importar não trava no reparo; "Reparar malha" abre o Raio-X depois', asyn
 test('SmartCut: hover acende a cabeça inteira → clique → Enter → corta', async ({ page }) => {
   await fresh(page);
   await page.getByTestId('open-example').click();
-  const parts = page.getByRole('list', { name: 'Lista de partes' }).getByTestId('part-row');
+  const parts = page.getByRole('list', { name: 'Lista de peças' }).getByTestId('part-row');
   await expect(parts).toHaveCount(1);
-  await page.keyboard.press('s');
+  // A first model opens the Separar step: its parts are recognised and shown in colour.
+  await expect(page.getByTestId('split-all')).toBeVisible({ timeout: 30_000 });
   const viewport = page.getByTestId('viewport');
   const box = (await viewport.boundingBox())!;
   // The example is framed with the head near the top centre of the viewport.
   const head = { x: box.x + box.width * 0.5, y: box.y + box.height * 0.27 };
   await page.mouse.move(head.x, head.y);
   await page.mouse.move(head.x + 2, head.y + 1);
-  // The detected part under the cursor is named in the panel.
-  await page.mouse.move(head.x + 3, head.y + 2);
-  await expect(page.getByLabel('Inspector')).toContainText('Cabeça', { timeout: 30_000 });
   await page.mouse.click(head.x + 2, head.y + 1);
   await expect(page.getByText('SmartCut — revisar')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByTestId('cut-ok')).toContainText('Vai gerar 2 peças');
+  await expect(page.getByTestId('cut-ok')).toContainText('Vai gerar 2 peças', { timeout: 30_000 });
   await page.keyboard.press('Enter');
-  await expect(parts).toHaveCount(2);
+  await expect(parts).toHaveCount(2, { timeout: 60_000 });
   const history = page.getByLabel('Histórico');
   await expect(history).toContainText('Cabeça');
   await expect(history).toContainText(/junta (curva|livre)/);

@@ -3,7 +3,7 @@ import { useMemo, useRef } from 'react';
 import { Color, type Mesh, type MeshStandardMaterial, type Vector3 } from 'three';
 import { setPartMeta } from '../../store/commands';
 import { dispatch, useHistory } from '../../store/history';
-import { focus, setUI, useUI, type ViewPart } from '../../store/ui';
+import { focus, setUI, splitTarget, useUI, type ViewPart } from '../../store/ui';
 import { ACCENT } from '../../ui/tokens';
 import { partColor } from '../paint/colors';
 import { brushDown, brushLeave, brushMove } from '../smartcut/brush';
@@ -18,9 +18,8 @@ function PartMesh({ part, offset, color, selected, hovered, interactive }: { par
   const mesh = useRef<Mesh>(null);
   const mat = useRef<MeshStandardMaterial>(null);
   const busy = useUI((s) => s.busy);
-  const tool = useUI((s) => s.tool);
   const controls = useThree((s) => s.controls);
-  const brushing = tool === 'brush';
+  const brushing = useUI((s) => s.tool === 'brush' && s.brushAdvanced);
 
   useFrame(({ clock }) => {
     if (!mat.current) return;
@@ -47,7 +46,7 @@ function PartMesh({ part, offset, color, selected, hovered, interactive }: { par
           ? (e) => {
               e.stopPropagation();
               const { tool } = useUI.getState();
-              if (tool === 'brush') return;
+              if (tool === 'brush' && useUI.getState().brushAdvanced) return;
               if (tool === 'paint') {
                 const slot = useUI.getState().activeSlot;
                 dispatch(setPartMeta(part.id, { slot }, `Pintar ${part.name}`));
@@ -73,6 +72,10 @@ export function Parts({ offsets, hiddenId }: { offsets: Map<string, Vector3>; hi
   const maps = useUI((s) => s.partMaps);
   const tool = useUI((s) => s.tool);
   const brushAdvanced = useUI((s) => s.brushAdvanced);
+  const step = useUI((s) => s.step);
+  const target = useUI(splitTarget);
+  // Split step: the target shows its detected parts; hover lights one, a click cuts it off.
+  const picking = step === 'split' && !drafting && (tool === 'select' || (tool === 'brush' && !brushAdvanced));
   const visible = useMemo(() => parts.filter((p) => doc.partMeta[p.id]?.visible !== false && p.id !== hiddenId), [parts, doc.partMeta, hiddenId]);
   return (
     <group>
@@ -82,8 +85,7 @@ export function Parts({ offsets, hiddenId }: { offsets: Map<string, Vector3>; hi
         const edits = doc.partMaps?.[p.id];
         const map = maps[p.id];
         const ready = map?.status === 'ready' && map.version === p.version && map.result;
-        // SmartCut: the detected part under the cursor lights up; a click cuts it off.
-        if (tool === 'brush' && !brushAdvanced && ready && map.result)
+        if (picking && p.id === target && ready && map.result)
           return (
             <PartMapMesh
               key={p.id}
@@ -92,12 +94,9 @@ export function Parts({ offsets, hiddenId }: { offsets: Map<string, Vector3>; hi
               result={map.result}
               edits={edits ?? NO_EDITS}
               interactive={interactive}
-              mono={partColor(doc, p)}
               onPick={(point, group) => pickDetectedPart(p.id, point, group)}
             />
           );
-        if (edits && tool === 'select' && ready && map.result)
-          return <PartMapMesh key={p.id} part={p} offset={offsets.get(p.id)!} result={map.result} edits={edits} interactive={interactive} />;
         return (
           <PartMesh
             key={p.id}

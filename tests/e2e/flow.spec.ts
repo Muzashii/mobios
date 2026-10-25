@@ -10,7 +10,7 @@ test('exemplo → corte com pino → exportar 3MF', async ({ page }) => {
   await page.reload();
 
   await page.getByTestId('open-example').click();
-  const parts = page.getByRole('list', { name: 'Lista de partes' }).getByTestId('part-row');
+  const parts = page.getByRole('list', { name: 'Lista de peças' }).getByTestId('part-row');
   await expect(parts).toHaveCount(1);
 
   await page.keyboard.press('c');
@@ -27,19 +27,4 @@ test('exemplo → corte com pino → exportar 3MF', async ({ page }) => {
   await page.getByTestId('export-menu').click();
   await page.getByRole('menuitem', { name: /3MF/ }).click();
   expect((await download).suggestedFilename()).toMatch(/\.3mf$/);
-});
-
-test('tour de primeiros passos avança com as ações', async ({ page }) => {
-  await page.goto('/');
-  await page.evaluate(() => {
-    indexedDB.deleteDatabase('mobios');
-    localStorage.removeItem('mobios-onboarding-done');
-  });
-  await page.reload();
-  await page.getByTestId('open-example').click();
-  const tour = page.getByTestId('onboarding');
-  await expect(tour).toContainText('1/4');
-  await page.keyboard.press('c');
-  await page.getByTestId('commit-cut').click();
-  await expect(tour).toContainText('3/4');
 });

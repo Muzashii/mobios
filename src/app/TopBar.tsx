@@ -4,11 +4,10 @@ import { exportAssemblyGuide } from '../features/export/assemblyGuide';
 import { newProject, openExample, openFilePicker } from '../features/import/importActions';
 import { renameProject } from '../store/commands';
 import { dispatch, useHistory } from '../store/history';
-import { setUI, useUI } from '../store/ui';
-import { startBrush } from '../features/cut/cutActions';
+import { setUI, useUI, type Step } from '../store/ui';
 import { Button, cx, IconButton, Kbd } from '../ui/components';
 import { IconCheck, IconCommand, IconExport, IconLogo, IconMoon, IconOpen, IconRedo, IconSun, IconUndo } from '../ui/icons';
-import { toggleTheme } from './commands';
+import { goToStep, toggleTheme } from './commands';
 
 function MenuItem({ children, onSelect, shortcut }: { children: React.ReactNode; onSelect: () => void; shortcut?: string }) {
   return (
@@ -22,47 +21,45 @@ function MenuItem({ children, onSelect, shortcut }: { children: React.ReactNode;
   );
 }
 
-/** Where the project is in the flow import → split → fit → export; each step is also a shortcut to it. */
+/** The flow as tabs: each opens its step in the side panel; a check marks what is done. */
 function Steps() {
+  const step = useUI((s) => s.step);
   const ops = useHistory((s) => s.doc.operations);
   const hasModel = useHistory((s) => s.doc.sources.length > 0);
-  const hasParts = useUI((s) => s.parts.length > 0);
+  const painted = useHistory((s) => Object.values(s.doc.partMeta).some((m) => m.slot));
   const cut = ops.some((o) => o.kind === 'cut-plane' || o.kind === 'cut-region' || o.kind === 'cut-surface');
-  const lastConnector = [...ops].reverse().find((o) => o.kind === 'connector')?.id;
-  const steps = [
-    { label: 'Importar', done: hasModel, run: () => void openFilePicker(), enabled: true },
-    { label: 'Separar', done: cut, run: () => startBrush(), enabled: hasParts },
-    { label: 'Encaixar', done: !!lastConnector, run: () => setUI({ connectorEdit: lastConnector, selection: null, draft: null, tool: 'select' }), enabled: !!lastConnector },
-    { label: 'Exportar', done: false, run: () => void exportParts('3mf'), enabled: hasParts },
+  const fitted = ops.some((o) => o.kind === 'connector');
+  const steps: { id: Step; label: string; done: boolean }[] = [
+    { id: 'model', label: 'Modelo', done: hasModel },
+    { id: 'split', label: 'Separar', done: cut },
+    { id: 'fit', label: 'Encaixes', done: fitted },
+    { id: 'color', label: 'Cores', done: painted },
   ];
-  const current = steps.findIndex((st) => !st.done);
   return (
-    <ol aria-label="Etapas" className="hidden items-center gap-1 lg:flex">
+    <nav aria-label="Etapas" className="flex items-center rounded-full bg-surface-2 p-0.5">
       {steps.map((st, i) => (
-        <li key={st.label} className="flex items-center gap-1">
-          {i > 0 && <span className={cx('h-px w-4', st.done || i === current ? 'bg-accent' : 'bg-line')} aria-hidden />}
-          <button
-            disabled={!st.enabled}
-            onClick={st.run}
-            aria-current={i === current ? 'step' : undefined}
+        <button
+          key={st.id}
+          onClick={() => goToStep(st.id)}
+          aria-current={step === st.id ? 'step' : undefined}
+          data-testid={`step-${st.id}`}
+          className={cx(
+            'flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] transition-colors',
+            step === st.id ? 'bg-surface-3 font-medium text-text shadow-sm' : 'text-muted hover:text-text',
+          )}
+        >
+          <span
             className={cx(
-              'flex h-7 items-center gap-1.5 rounded-full px-2.5 text-xs transition-colors disabled:pointer-events-none',
-              i === current ? 'bg-accent-soft font-medium text-accent' : st.done ? 'text-text hover:bg-surface-3' : 'text-muted opacity-70 hover:bg-surface-3',
+              'num flex size-[18px] items-center justify-center rounded-full text-[10px] font-semibold',
+              st.done ? 'bg-accent text-accent-text' : step === st.id ? 'bg-accent-soft text-accent' : 'bg-surface-3 text-muted',
             )}
           >
-            <span
-              className={cx(
-                'num flex size-4 items-center justify-center rounded-full text-[10px]',
-                st.done ? 'bg-accent text-accent-text' : i === current ? 'border border-accent' : 'border border-line',
-              )}
-            >
-              {st.done ? <IconCheck size={10} /> : i + 1}
-            </span>
-            {st.label}
-          </button>
-        </li>
+            {st.done ? <IconCheck size={11} /> : i + 1}
+          </span>
+          <span className="max-sm:sr-only">{st.label}</span>
+        </button>
       ))}
-    </ol>
+    </nav>
   );
 }
 
@@ -110,7 +107,7 @@ export function TopBar() {
           value={name}
           onChange={(e) => dispatch(renameProject(e.target.value))}
           onKeyDown={(e) => e.stopPropagation()}
-          className="h-7 w-40 min-w-0 rounded-md border border-transparent bg-transparent px-1.5 text-[13px] text-text outline-none hover:border-line focus:border-accent"
+          className="h-7 w-40 min-w-0 max-md:hidden rounded-md border border-transparent bg-transparent px-1.5 text-[13px] text-text outline-none hover:border-line focus:border-accent"
         />
       </div>
 
@@ -127,7 +124,7 @@ export function TopBar() {
         <IconButton label={redoLabel ? `Refazer: ${redoLabel}` : 'Refazer'} shortcut="Ctrl+Y" disabled={!redoLabel} onClick={redo}>
           <IconRedo />
         </IconButton>
-        <IconButton label="Paleta de comandos" shortcut="Ctrl+K" onClick={() => setUI({ paletteOpen: true })}>
+        <IconButton label="Paleta de comandos" shortcut="Ctrl+K" className="max-sm:hidden" onClick={() => setUI({ paletteOpen: true })}>
           <IconCommand />
         </IconButton>
         <IconButton label={theme === 'dark' ? 'Tema claro' : 'Tema escuro'} onClick={toggleTheme}>
@@ -138,7 +135,7 @@ export function TopBar() {
       <Menu.Root>
         <Menu.Trigger asChild>
           <Button variant="primary" disabled={!hasParts} data-testid="export-menu">
-            <IconExport size={15} /> Exportar
+            <IconExport size={15} /> <span className="max-sm:sr-only">Exportar</span>
           </Button>
         </Menu.Trigger>
         <Menu.Portal>

@@ -38,3 +38,30 @@ export function groupOf(result: PartMapResult, edits: PartMapEdits): Int32Array 
   for (const p of result.parts) out[p.id] = resolveMapPart(edits, p.id);
   return out;
 }
+
+/**
+ * Order to cut the groups off so what is left always stays in one piece: peel the outside first
+ * (a group touching a single remaining group — hat, hand, base), smallest first. The last group
+ * left (the torso, usually) is the body and is not cut.
+ */
+export function peelOrder(map: PartMapResult, edits: PartMapEdits, groups: { id: number; share: number }[]): number[] {
+  const root = (id: number) => resolveMapPart(edits, id);
+  const nbrs = new Map<number, Set<number>>(groups.map((g) => [g.id, new Set<number>()]));
+  for (const p of map.parts)
+    for (const q of p.touches ?? []) {
+      const a = root(p.id), b = root(q);
+      if (a !== b && nbrs.has(a) && nbrs.has(b)) nbrs.get(a)!.add(b);
+    }
+  const share = new Map(groups.map((g) => [g.id, g.share]));
+  const left = new Set(groups.map((g) => g.id));
+  const order: number[] = [];
+  while (left.size > 1) {
+    const degree = (g: number) => [...nbrs.get(g)!].filter((n) => left.has(n)).length;
+    const pool = [...left];
+    const leaves = pool.filter((g) => degree(g) <= 1);
+    const next = (leaves.length ? leaves : pool).sort((a, b) => share.get(a)! - share.get(b)!)[0];
+    order.push(next);
+    left.delete(next);
+  }
+  return order;
+}
