@@ -1,0 +1,24 @@
+import { chromium } from '@playwright/test';
+// Layout screenshots in a fresh browser profile: desktop with the example, SmartCut hover, phone.
+const out = process.argv[2] ?? '.';
+const browser = await chromium.launch({ channel: 'msedge', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+await page.goto('http://localhost:5173/');
+await page.evaluate(() => localStorage.setItem('mobios-onboarding-done', '1'));
+await page.reload();
+await page.screenshot({ path: `${out}/layout-empty.png` });
+await page.getByTestId('open-example').click();
+await page.waitForTimeout(3500);
+await page.screenshot({ path: `${out}/layout-model.png` });
+await page.keyboard.press('s');
+const box = await page.getByTestId('viewport').boundingBox();
+await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.27);
+await page.waitForTimeout(5000);
+await page.mouse.move(box.x + box.width * 0.5 + 3, box.y + box.height * 0.27 + 2);
+await page.waitForTimeout(800);
+await page.screenshot({ path: `${out}/layout-smartcut.png` });
+await page.setViewportSize({ width: 390, height: 844 });
+await page.keyboard.press('Escape');
+await page.waitForTimeout(800);
+await page.screenshot({ path: `${out}/layout-phone.png` });
+await browser.close();

@@ -39,11 +39,14 @@ export function App() {
         >
           Pular para o painel de propriedades
         </a>
-        <div className="grid h-full grid-cols-[52px_minmax(0,1fr)_300px] grid-rows-[48px_minmax(0,1fr)_168px] bg-bg">
-          <div className="col-span-3">
+        <div className="grid h-full grid-cols-[248px_minmax(0,1fr)_312px] grid-rows-[48px_minmax(0,1fr)] bg-bg max-md:grid-cols-[minmax(0,1fr)] max-md:grid-rows-[48px_minmax(0,1fr)_40vh]">
+          <div className="col-span-3 max-md:col-span-1">
             <TopBar />
           </div>
-          <Toolbar />
+          <aside aria-label="Projeto" className="flex min-h-0 flex-col border-r border-line bg-surface max-md:hidden">
+            <Outliner />
+            <HistoryPanel />
+          </aside>
           <main className="relative overflow-hidden" aria-label="Viewport 3D">
             {hasModel ? (
               <Suspense fallback={<div className="shimmer absolute inset-0" />}>
@@ -67,14 +70,11 @@ export function App() {
               <BusyPill />
               <ExplodeSlider />
               <AssemblyBar />
+              <Toolbar />
             </div>
           </main>
-          <div className="row-span-2">
+          <div className="min-h-0 max-md:border-t max-md:border-line">
             <Inspector />
-          </div>
-          <div className="col-span-2 flex min-h-0 border-t border-line bg-surface">
-            <Outliner />
-            <HistoryPanel />
           </div>
         </div>
         <DropOverlay />

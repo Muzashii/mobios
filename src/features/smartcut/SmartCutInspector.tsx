@@ -15,7 +15,12 @@ export function SmartCutInspector() {
 
 function AdvancedSwitch() {
   const advanced = useUI((s) => s.brushAdvanced);
-  return <Switch label="Pincel (avançado)" checked={advanced} onChange={(v) => setUI({ brushAdvanced: v, hover: null, mapHover: null })} />;
+  return (
+    <label className="flex items-center gap-2 text-[11px] text-muted">
+      Pincel
+      <Switch label="Pincel (avançado)" checked={advanced} onChange={(v) => setUI({ brushAdvanced: v, hover: null, mapHover: null })} />
+    </label>
+  );
 }
 
 function ExitFooter({ children }: { children?: ReactNode }) {

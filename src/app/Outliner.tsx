@@ -16,10 +16,10 @@ export function Outliner() {
   const printer = printerOf(doc);
 
   return (
-    <section aria-label="Partes" className="flex min-w-0 flex-1 flex-col">
-      <header className="flex h-9 shrink-0 items-center justify-between border-b border-line px-3">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">Partes</h2>
-        <span className="num text-[11px] text-muted">{parts.length}</span>
+    <section aria-label="Partes" className="flex min-h-0 flex-1 flex-col">
+      <header className="flex h-10 shrink-0 items-center justify-between px-3">
+        <h2 className="text-[13px] font-semibold text-text">Partes</h2>
+        <span className="num rounded-full bg-surface-3 px-1.5 text-[11px] text-muted">{parts.length}</span>
       </header>
       {parts.length === 0 && <p className="px-3 py-2 text-xs text-muted">Nenhuma parte ainda.</p>}
       <ul className="min-h-0 flex-1 overflow-y-auto py-1" aria-label="Lista de partes">
@@ -35,7 +35,7 @@ export function Outliner() {
               onMouseEnter={() => setUI({ hovered: p.id })}
               onMouseLeave={() => useUI.getState().hovered === p.id && setUI({ hovered: null })}
               className={cx(
-                'group mx-1 flex h-7 items-center gap-1 rounded-md pr-1 text-xs',
+                'group mx-1.5 flex h-8 items-center gap-1 rounded-md pr-1 text-xs',
                 selection === p.id ? 'bg-accent-soft text-text' : hovered === p.id ? 'bg-surface-3' : 'hover:bg-surface-3',
                 hidden && 'opacity-50',
               )}

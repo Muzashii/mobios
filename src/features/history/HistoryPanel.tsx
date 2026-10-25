@@ -50,14 +50,14 @@ export function HistoryPanel() {
   let cutIndex = 0;
 
   return (
-    <section aria-label="Histórico" className="flex min-w-0 flex-[1.3] flex-col border-l border-line">
-      <header className="flex h-9 shrink-0 items-center justify-between border-b border-line px-3">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">Histórico</h2>
-        <span className="text-[11px] text-muted">{canUndo ? 'Ctrl+Z desfaz' : 'clique numa etapa para editar'}</span>
+    <section aria-label="Histórico" className="flex max-h-[45%] min-h-0 shrink-0 flex-col border-t border-line">
+      <header className="flex h-10 shrink-0 items-center justify-between px-3">
+        <h2 className="text-[13px] font-semibold text-text">Histórico</h2>
+        <span className="text-[11px] text-muted">{canUndo ? 'Ctrl+Z desfaz' : 'clique para editar'}</span>
       </header>
-      <ol className="flex min-h-0 flex-1 items-stretch gap-2 overflow-x-auto overflow-y-hidden p-2">
+      <ol className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto px-2 pb-2">
         {doc.sources.map((s) => (
-          <li key={s.id} className="flex w-40 shrink-0 flex-col justify-center rounded-lg border border-line bg-surface-2 px-3 py-2">
+          <li key={s.id} className="flex shrink-0 flex-col justify-center rounded-lg border border-line bg-surface-2 px-3 py-2">
             <div className="flex items-center gap-1.5 text-xs text-muted">
               <IconCube size={14} /> Importar
             </div>
@@ -79,7 +79,7 @@ export function HistoryPanel() {
                 onClick={() => (isCut ? void editCut(op.id) : editConnector(op.id))}
                 onKeyDown={(e) => e.key === 'Enter' && (isCut ? void editCut(op.id) : editConnector(op.id))}
                 className={cx(
-                  'group relative flex h-full w-48 cursor-pointer flex-col justify-center rounded-lg border px-3 py-2 text-left transition-colors',
+                  'group relative flex w-full cursor-pointer flex-col justify-center rounded-lg border px-3 py-2 text-left transition-colors',
                   active ? 'border-accent bg-accent-soft' : rep?.error ? 'border-danger/60 bg-danger/5' : 'border-line bg-surface-2 hover:border-muted',
                 )}
               >

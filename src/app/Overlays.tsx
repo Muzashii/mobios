@@ -16,7 +16,7 @@ export function ExplodeSlider() {
   const assembling = useUI((s) => s.assembly !== null);
   if (count < 2 || assembling) return null;
   return (
-    <div className="pointer-events-auto absolute bottom-4 left-1/2 flex w-72 -translate-x-1/2 items-center gap-3 rounded-full border border-line bg-surface/90 px-4 py-2 shadow-panel backdrop-blur">
+    <div className="pointer-events-auto absolute bottom-[4.75rem] left-1/2 flex w-72 -translate-x-1/2 items-center gap-3 rounded-full border border-line bg-surface/90 px-4 py-2 shadow-panel backdrop-blur">
       <span className="text-[11px] text-muted">Explodir</span>
       <Slider label="Vista explodida" value={explode} min={0} max={1} step={0.01} onChange={(v) => setUI({ explode: v })} />
       <span className="num w-9 text-right text-[11px]">{Math.round(explode * 100)}%</span>
@@ -52,7 +52,7 @@ export function AssemblyBar() {
   const colliding = checked.filter((j) => j.assemblyClear === false);
   const current = activeJoint(joints, progress);
   return (
-    <div className="pointer-events-auto absolute bottom-4 left-1/2 flex w-[30rem] max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col gap-1.5 rounded-xl border border-line bg-surface/90 px-4 py-2.5 shadow-panel backdrop-blur" data-testid="assembly-bar">
+    <div className="pointer-events-auto absolute bottom-[4.75rem] left-1/2 flex w-[30rem] max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col gap-1.5 rounded-xl border border-line bg-surface/90 px-4 py-2.5 shadow-panel backdrop-blur" data-testid="assembly-bar">
       <div className="flex items-center gap-3">
         <button
           aria-label={playing ? 'Pausar' : 'Reproduzir'}
@@ -145,7 +145,7 @@ export function ToolHint() {
 
 const STEPS = [
   { icon: IconCube, title: 'Importar', text: 'STL, OBJ ou 3MF — reparo automático' },
-  { icon: IconCut, title: 'Cortar', text: 'Plano com gizmo e preview ao vivo' },
+  { icon: IconCut, title: 'Separar', text: 'Aponte a cabeça, o braço… e clique' },
   { icon: IconPin, title: 'Encaixar', text: 'Pinos com folga para FDM ou resina' },
   { icon: IconExport, title: 'Exportar', text: '3MF colorido para Bambu Studio, STL' },
 ];

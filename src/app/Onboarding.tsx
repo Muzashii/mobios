@@ -75,7 +75,7 @@ export function Onboarding() {
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0 }}
-        className="pointer-events-auto absolute bottom-16 left-3 w-72 max-w-[calc(100%-1.5rem)] rounded-xl border border-line bg-surface/95 p-3 shadow-panel backdrop-blur"
+        className="pointer-events-auto absolute bottom-[4.75rem] left-3 w-72 max-w-[calc(100%-1.5rem)] rounded-xl border border-line bg-surface/95 p-3 shadow-panel backdrop-blur"
         data-testid="onboarding"
       >
         <div className="flex items-center justify-between">
