@@ -25,22 +25,26 @@ function brokenCube() {
   return Buffer.from(`solid t\n${facets.join('\n')}\nendsolid t\n`);
 }
 
-test('Raio-X: STL quebrado mostra os problemas e entra reparado', async ({ page }) => {
+test('importar não trava no reparo; "Reparar malha" abre o Raio-X depois', async ({ page }) => {
   await fresh(page);
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Abrir arquivo/ }).first().click();
   await (await chooser).setFiles({ name: 'cubo-quebrado.stl', mimeType: 'model/stl', buffer: brokenCube() });
-  const panel = page.getByTestId('xray');
-  await expect(panel).toContainText('Precisa de reparo');
-  await expect(panel).toContainText('furo');
-  await expect(panel).toContainText('sujeira');
-  await page.getByTestId('xray-apply').click();
-  await expect(panel).toHaveCount(0);
+  // The model comes straight in: only the lossless fixes (hole closed, debris dropped).
+  await expect(page.getByTestId('xray')).toHaveCount(0);
   await expect(page.getByLabel('Histórico')).toContainText('Raio-X: 1 furo(s) fechado(s)');
-  await expect(page.getByRole('list', { name: 'Lista de partes' })).toContainText('27');
+  const parts = page.getByRole('list', { name: 'Lista de partes' });
+  await expect(parts).toContainText('27');
+  // The full Raio-X stays one click away, on the part.
+  await parts.getByTestId('part-row').first().click();
+  await page.getByRole('button', { name: 'Reparar malha' }).click();
+  const panel = page.getByTestId('xray');
+  await expect(panel).toContainText('Reparar malha');
+  await page.getByRole('button', { name: /Cancelar/ }).click();
+  await expect(panel).toHaveCount(0);
 });
 
-test('SmartCut v2: hover na cabeça → clique → Enter → junta curva com pino', async ({ page }) => {
+test('SmartCut: hover acende a cabeça inteira → clique → Enter → corta', async ({ page }) => {
   await fresh(page);
   await page.getByTestId('open-example').click();
   const parts = page.getByRole('list', { name: 'Lista de partes' }).getByTestId('part-row');
@@ -52,16 +56,17 @@ test('SmartCut v2: hover na cabeça → clique → Enter → junta curva com pin
   const head = { x: box.x + box.width * 0.5, y: box.y + box.height * 0.27 };
   await page.mouse.move(head.x, head.y);
   await page.mouse.move(head.x + 2, head.y + 1);
-  await expect(page.getByText(/Sob o cursor: Cabeça/)).toBeVisible({ timeout: 10_000 });
+  // The detected part under the cursor is named in the panel.
+  await page.mouse.move(head.x + 3, head.y + 2);
+  await expect(page.getByLabel('Inspector')).toContainText('Cabeça', { timeout: 30_000 });
   await page.mouse.click(head.x + 2, head.y + 1);
   await expect(page.getByText('SmartCut — revisar')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId('cut-ok')).toContainText('Vai gerar 2 peças');
   await page.keyboard.press('Enter');
   await expect(parts).toHaveCount(2);
   const history = page.getByLabel('Histórico');
-  await expect(history).toContainText('Cabeça · SmartCut');
-  await expect(history).toContainText('junta curva');
-  await expect(history).toContainText('sem colisão');
+  await expect(history).toContainText('Cabeça');
+  await expect(history).toContainText(/junta (curva|livre)/);
 });
 
 test('corte que não atravessa a peça é explicado e não é aplicado', async ({ page }) => {

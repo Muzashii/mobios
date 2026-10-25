@@ -12,7 +12,8 @@ const m = new Matrix4();
 /** Painted region (translucent dabs) and the brush cursor. */
 export function BrushLayer() {
   const brush = useUI((s) => s.brush);
-  const active = useUI((s) => s.tool === 'brush');
+  // Only the free brush draws dabs and a cursor; picking detected parts needs neither.
+  const active = useUI((s) => s.tool === 'brush' && s.brushAdvanced);
   const hover = useUI((s) => (s.tool === 'brush' ? s.hover : null));
   const dabs = useRef<InstancedMesh>(null);
   const negDabs = useRef<InstancedMesh>(null);

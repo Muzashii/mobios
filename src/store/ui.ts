@@ -29,6 +29,8 @@ export interface RegionDraft {
   /** Shell thickness (mm). */
   depth: number;
   name: string;
+  /** Cut by detected parts (SmartCut hover): points on the parts that leave. */
+  partSeeds?: Vec3[];
 }
 
 export interface CutDraft {
@@ -127,6 +129,8 @@ export interface XRayState {
 interface UIState {
   tool: Tool;
   brush: BrushState;
+  /** SmartCut: free brush instead of picking detected parts. */
+  brushAdvanced: boolean;
   selection: PartId | null;
   hovered: PartId | null;
   draft: CutDraft | null;
@@ -165,6 +169,7 @@ interface UIState {
 export const useUI = create<UIState>(() => ({
   tool: 'select',
   brush: { target: null, seeds: [], negSeeds: [], radius: 4 },
+  brushAdvanced: false,
   selection: null,
   hovered: null,
   draft: null,

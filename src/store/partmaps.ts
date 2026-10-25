@@ -6,10 +6,18 @@ import { toast, useUI } from './ui';
  * Keeps the automatic part maps of the parts that show one in step with their meshes: computed
  * in the worker when shown, again whenever the part's mesh changes (new version).
  */
+/** Parts whose map is needed without being shown (SmartCut picks parts on them). */
+const wanted = new Set<string>();
+
+export function requestPartMap(id: string) {
+  wanted.add(id);
+  ensurePartMaps();
+}
+
 export function ensurePartMaps() {
   const { doc } = useHistory.getState();
   const { parts, partMaps } = useUI.getState();
-  for (const id of Object.keys(doc.partMaps ?? {})) {
+  for (const id of new Set([...Object.keys(doc.partMaps ?? {}), ...wanted])) {
     const part = parts.find((p) => p.id === id);
     if (!part) continue;
     const cache = partMaps[id];

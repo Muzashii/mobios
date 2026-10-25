@@ -235,7 +235,7 @@ export class Engine {
     const joints = new Map(prev.joints);
     const label = `J${cutCount}`;
     joints.set(op.id, { id: op.id, a: ids.a, b: ids.b, plane, bounded: op.kind === 'cut-plane' ? op.bounded : undefined, faceArea, label, planar, ...(faceRadius ? { faceRadius } : {}), insertDir, obstacles: [] });
-    const shape = op.kind === 'cut-region' ? (op.mode === 'shell' ? ' · casca' : faceRadius ? ' · junta curva' : ' · plano') : '';
+    const shape = op.kind === 'cut-region' ? (op.mode === 'shell' ? ' · casca' : faceRadius ? ' · junta curva' : planar ? ' · plano' : ' · junta livre') : '';
     return { state: { parts, joints }, warnings, info: `${faceArea.toFixed(0)} mm² de face${shape}` };
   }
 

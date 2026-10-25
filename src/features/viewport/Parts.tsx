@@ -7,7 +7,10 @@ import { focus, setUI, useUI, type ViewPart } from '../../store/ui';
 import { ACCENT } from '../../ui/tokens';
 import { partColor } from '../paint/colors';
 import { brushDown, brushLeave, brushMove } from '../smartcut/brush';
+import { pickDetectedPart } from '../cut/cutActions';
 import { PartMapMesh } from './PartMapMesh';
+
+const NO_EDITS = { names: {}, merged: {} };
 
 const accent = new Color(ACCENT);
 
@@ -69,6 +72,7 @@ export function Parts({ offsets, hiddenId }: { offsets: Map<string, Vector3>; hi
   const doc = useHistory((s) => s.doc);
   const maps = useUI((s) => s.partMaps);
   const tool = useUI((s) => s.tool);
+  const brushAdvanced = useUI((s) => s.brushAdvanced);
   const visible = useMemo(() => parts.filter((p) => doc.partMeta[p.id]?.visible !== false && p.id !== hiddenId), [parts, doc.partMeta, hiddenId]);
   return (
     <group>
@@ -77,7 +81,22 @@ export function Parts({ offsets, hiddenId }: { offsets: Map<string, Vector3>; hi
         // Detected parts show while selecting; cutting, painting and the brush use the plain mesh.
         const edits = doc.partMaps?.[p.id];
         const map = maps[p.id];
-        if (edits && tool === 'select' && map?.status === 'ready' && map.version === p.version && map.result)
+        const ready = map?.status === 'ready' && map.version === p.version && map.result;
+        // SmartCut: the detected part under the cursor lights up; a click cuts it off.
+        if (tool === 'brush' && !brushAdvanced && ready && map.result)
+          return (
+            <PartMapMesh
+              key={p.id}
+              part={p}
+              offset={offsets.get(p.id)!}
+              result={map.result}
+              edits={edits ?? NO_EDITS}
+              interactive={interactive}
+              mono={partColor(doc, p)}
+              onPick={(point, group) => pickDetectedPart(p.id, point, group)}
+            />
+          );
+        if (edits && tool === 'select' && ready && map.result)
           return <PartMapMesh key={p.id} part={p} offset={offsets.get(p.id)!} result={map.result} edits={edits} interactive={interactive} />;
         return (
           <PartMesh

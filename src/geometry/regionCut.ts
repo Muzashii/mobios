@@ -1,12 +1,14 @@
 import { Box3, Vector3 } from 'three';
 import type { Manifold } from 'manifold-3d';
 import { CutError, cutByPlane } from './cut';
+import { partLabelsOn } from './partmap';
+import { SolidGrid } from './segment/volume';
 import { planeFrame } from './math';
 import { buildTopology } from './mesh/topology';
 import { trianglesIntersect } from './mesh/tritri';
 import { smoothBoundary } from './segment/smoothBoundary';
 import { meshDataToManifold } from './repair';
-import { boundaryLoops, fitPlane, labelFaces, LoopError, regionField, type RegionContext } from './segment/region';
+import { boundaryLoops, fitPlane, fixPinches, labelFaces, LoopError, regionField, snapToCreases, type RegionContext } from './segment/region';
 import type { MeshData, Plane, RegionCutOperation, Vec3 } from './types';
 import type { Wasm } from './wasm';
 
@@ -365,6 +367,253 @@ export interface RegionCutResult {
   warnings: string[];
 }
 
+/**
+ * Cut along the border of detected parts: B = the automatic parts under `partSeeds`, from the
+ * part map of this exact solid. The border gets the smoothed joint line and a cap like any
+ * region cut; if no cap closes, a plane fitted to the border cuts instead.
+ */
+function cutDetectedParts(wasm: Wasm, part: Manifold, ctx: RegionContext, op: RegionCutOperation): RegionCutResult {
+  const parts = partLabelsOn(part, ctx.mesh);
+  const want = new Set<number>();
+  const seedFaces: number[] = [];
+  for (const s of op.partSeeds!) {
+    const hit = ctx.query.closest(s);
+    if (hit) {
+      want.add(parts[hit.face]);
+      seedFaces.push(hit.face);
+    }
+  }
+  const base = new Uint8Array(ctx.topo.nf);
+  for (let f = 0; f < base.length; f++) if (want.has(parts[f])) base[f] = 1;
+  cleanLabels(ctx, base, seedFaces, parts);
+  const area = (l: Uint8Array) => l.reduce((s, v, f) => s + (v ? ctx.topo.fArea[f] : 0), 0);
+  if (!area(base) || area(base) >= ctx.topo.totalArea * 0.999) throw new CutError('Escolha uma parte que não seja a peça inteira.');
+  // The map's border is approximate: settle it on the real crease nearby (neck, shoulder, brim).
+  // If its cap cannot close, the same crease a ring or two further in or out usually can.
+  const band = Math.max(3 * ctx.edge, ctx.diag * 0.04);
+  const variants: [number, number][] = [[band, 0], [band * 0.5, 0], [band, 1], [band, -1]];
+  const warnings: string[] = [];
+  let last: unknown;
+  let labels: Uint8Array = base;
+  for (const [w, shift] of variants) {
+    labels = snapToCreases(ctx.topo, base, w);
+    cleanLabels(ctx, labels, seedFaces, parts);
+    if (shift) shiftBorder(ctx, labels, shift);
+    cleanLabels(ctx, labels, seedFaces, parts);
+    try {
+      const split = splitRegion(ctx, labels, { mode: 'surface', towards: centroidOf(ctx, labels) });
+      const { a, b } = toSolids(wasm, part, split, false);
+      const faceRadius = split.faceRadius >= 1.5 ? split.faceRadius : undefined;
+      if (shift || w !== band) warnings.push('Emenda ajustada um pouco para a tampa caber.');
+      return { a, b, plane: split.plane, faceRadius, planar: !!faceRadius, used: 'surface', warnings };
+    } catch (e) {
+      if (!(e instanceof LoopError || e instanceof CutError)) throw e;
+      last = e;
+    }
+  }
+  // Borders no cap can close (long hair resting on the back): split the volume itself.
+  try {
+    const { a, b } = volumetricSplit(wasm, part, ctx, labels);
+    const plane = fitPlane(boundaryLoops(ctx.topo, labels).reduce((x, y) => (y.length > x.length ? y : x)).map((v) => at(ctx.topo.p, v)), centroidOf(ctx, labels)).plane;
+    warnings.push('Junta curva livre: a emenda segue o meio entre as partes (sem área plana para pinos).');
+    return { a, b, plane, planar: false, used: 'surface', warnings };
+  } catch (e) {
+    if (!(e instanceof LoopError || e instanceof CutError)) throw e;
+    last = e;
+  }
+  // Plane through the border, normal towards the part that leaves, limited to a sphere around
+  // the border: it cuts the neck, not the long hair hanging past it.
+  const centroid = centroidOf(ctx, labels);
+  let main: Vec3[] = [];
+  try {
+    main = boundaryLoops(ctx.topo, labels)
+      .reduce((x, y) => (y.length > x.length ? y : x), [] as number[])
+      .map((v) => at(ctx.topo.p, v));
+  } catch {
+    // keep the stored plane
+  }
+  const plane = main.length >= 3 ? fitPlane(main, centroid).plane : op.plane;
+  let res: ReturnType<typeof cutByPlane>;
+  try {
+    const radius = main.reduce((r, q) => Math.max(r, Math.hypot(q[0] - plane.origin[0], q[1] - plane.origin[1], q[2] - plane.origin[2])), 0) * 1.15;
+    if (!radius) throw new CutError('sem contorno');
+    res = cutByPlane(wasm, part, plane, { center: plane.origin, radius }, [centroid]);
+  } catch (e) {
+    if (!(e instanceof CutError)) throw e;
+    res = cutByPlane(wasm, part, plane, undefined, [centroid]);
+  }
+  warnings.push(`Corte curvo indisponível (${(last as Error).message.replace(/\.$/, '').toLowerCase()}); usado corte plano.`);
+  return { ...res, plane, planar: true, used: 'plane', warnings };
+}
+
+/**
+ * Splits the solid by which part's surface is nearest inside it: voxel labels spread from the
+ * surface inwards, a smoothed indicator becomes the field of a level set, and the halves are the
+ * exact booleans of the part with it. The joint follows the middle between the two surfaces,
+ * so it works where a cap cannot (hair hanging over the back, parts wrapping each other).
+ */
+function volumetricSplit(wasm: Wasm, part: Manifold, ctx: RegionContext, labels: Uint8Array): { a: Manifold; b: Manifold } {
+  const { mesh, query, topo } = ctx;
+  const box = part.boundingBox();
+  const longest = Math.max(box.max[0] - box.min[0], box.max[1] - box.min[1], box.max[2] - box.min[2]);
+  const h = longest / 140;
+  const grid = new SolidGrid(mesh, query, h);
+  const [nx, ny, nz] = grid.n;
+  const lab = new Int8Array(nx * ny * nz).fill(-1);
+  const cell = (x: number, y: number, z: number) => {
+    const i = Math.min(nx - 1, Math.max(0, Math.floor((x - grid.min[0]) / h)));
+    const j = Math.min(ny - 1, Math.max(0, Math.floor((y - grid.min[1]) / h)));
+    const k = Math.min(nz - 1, Math.max(0, Math.floor((z - grid.min[2]) / h)));
+    return i + nx * (j + ny * k);
+  };
+  const queue: number[] = [];
+  const { p, t } = topo;
+  for (let f = 0; f < topo.nf; f++) {
+    const a = t[f * 3] * 3, b = t[f * 3 + 1] * 3, c = t[f * 3 + 2] * 3;
+    const span = Math.max(Math.hypot(p[a] - p[b], p[a + 1] - p[b + 1], p[a + 2] - p[b + 2]), Math.hypot(p[b] - p[c], p[b + 1] - p[c + 1], p[b + 2] - p[c + 2]), Math.hypot(p[c] - p[a], p[c + 1] - p[a + 1], p[c + 2] - p[a + 2]));
+    const steps = Math.max(1, Math.ceil(span / h));
+    for (let i = 0; i <= steps; i++)
+      for (let j = 0; i + j <= steps; j++) {
+        const u = i / steps, v = j / steps, w = 1 - u - v;
+        const id = cell(p[a] * w + p[b] * u + p[c] * v, p[a + 1] * w + p[b + 1] * u + p[c + 1] * v, p[a + 2] * w + p[b + 2] * u + p[c + 2] * v);
+        if (lab[id] < 0) {
+          lab[id] = labels[f];
+          queue.push(id);
+        }
+      }
+  }
+  // Nearest surface label everywhere (breadth-first, 6-neighbourhood).
+  for (let q = 0; q < queue.length; q++) {
+    const id = queue[q];
+    const i = id % nx, j = Math.floor(id / nx) % ny, k = Math.floor(id / (nx * ny));
+    const nb = [i > 0 ? id - 1 : -1, i < nx - 1 ? id + 1 : -1, j > 0 ? id - nx : -1, j < ny - 1 ? id + nx : -1, k > 0 ? id - nx * ny : -1, k < nz - 1 ? id + nx * ny : -1];
+    for (const m of nb)
+      if (m >= 0 && lab[m] < 0) {
+        lab[m] = lab[id];
+        queue.push(m);
+      }
+  }
+  // Smoothed indicator of B (two box blurs) sampled trilinearly: the level-set field.
+  let ind: Float32Array = Float32Array.from(lab, (v) => (v === 1 ? 1 : 0));
+  for (let pass = 0; pass < 2; pass++)
+    for (const [stride, n] of [[1, nx], [nx, ny], [nx * ny, nz]] as const) {
+      const out = new Float32Array(ind.length);
+      for (let id = 0; id < ind.length; id++) {
+        const c = Math.floor(id / stride) % n;
+        const lo = c > 0 ? ind[id - stride] : ind[id], hi = c < n - 1 ? ind[id + stride] : ind[id];
+        out[id] = (lo + 2 * ind[id] + hi) / 4;
+      }
+      ind = out;
+    }
+  const at3 = (i: number, j: number, k: number) => ind[Math.min(nx - 1, Math.max(0, i)) + nx * (Math.min(ny - 1, Math.max(0, j)) + ny * Math.min(nz - 1, Math.max(0, k)))];
+  const field = (q: [number, number, number]) => {
+    const x = (q[0] - grid.min[0]) / h - 0.5, y = (q[1] - grid.min[1]) / h - 0.5, z = (q[2] - grid.min[2]) / h - 0.5;
+    const i = Math.floor(x), j = Math.floor(y), k = Math.floor(z);
+    const fx = x - i, fy = y - j, fz = z - k;
+    let v = 0;
+    for (let dz = 0; dz < 2; dz++)
+      for (let dy = 0; dy < 2; dy++)
+        for (let dx = 0; dx < 2; dx++) v += at3(i + dx, j + dy, k + dz) * (dx ? fx : 1 - fx) * (dy ? fy : 1 - fy) * (dz ? fz : 1 - fz);
+    return v - 0.5;
+  };
+  const region = wasm.Manifold.levelSet(field, { min: grid.min, max: [grid.min[0] + nx * h, grid.min[1] + ny * h, grid.min[2] + nz * h] }, h);
+  const b = part.intersect(region);
+  const a = part.subtract(region);
+  region.delete();
+  const v = Math.abs(part.volume());
+  if (a.isEmpty() || b.isEmpty() || a.volume() < v * 1e-4 || b.volume() < v * 1e-4 || Math.abs(a.volume() + b.volume() - v) > v * 0.01) {
+    a.delete();
+    b.delete();
+    throw new LoopError('A divisão pelo volume não fechou.');
+  }
+  return { a, b };
+}
+
+/** Area centroid of the B faces. */
+function centroidOf(ctx: RegionContext, labels: Uint8Array): Vec3 {
+  const { p, t, fArea } = ctx.topo;
+  const c: Vec3 = [0, 0, 0];
+  let area = 0;
+  for (let f = 0; f < labels.length; f++) {
+    if (!labels[f]) continue;
+    area += fArea[f];
+    for (let k = 0; k < 3; k++) c[k] += (fArea[f] * (p[t[f * 3] * 3 + k] + p[t[f * 3 + 1] * 3 + k] + p[t[f * 3 + 2] * 3 + k])) / 3;
+  }
+  return area ? [c[0] / area, c[1] / area, c[2] / area] : c;
+}
+
+/** Moves the border by whole rings of faces: positive grows B, negative shrinks it. */
+function shiftBorder(ctx: RegionContext, labels: Uint8Array, rings: number) {
+  const { faceNbr, nf } = ctx.topo;
+  const grow = rings > 0 ? 1 : 0;
+  for (let r = 0; r < Math.abs(rings); r++) {
+    const flip: number[] = [];
+    for (let f = 0; f < nf; f++) {
+      if (labels[f] === grow) continue;
+      for (let j = 0; j < 3; j++) {
+        const g = faceNbr[f * 3 + j];
+        if (g >= 0 && labels[g] === grow) {
+          flip.push(f);
+          break;
+        }
+      }
+    }
+    for (const f of flip) labels[f] = grow;
+  }
+}
+
+/**
+ * Labels carried from the part map are a little noisy at the borders: keep the pieces of B that
+ * hold a clicked point, give B every piece of A cut off from the main body (islands inside B, a
+ * hat on a head that leaves), and resolve pinched vertices so the border is made of clean loops.
+ */
+function cleanLabels(ctx: RegionContext, labels: Uint8Array, seedFaces: number[], parts: ArrayLike<number>) {
+  const { nf, faceNbr, fArea } = ctx.topo;
+  const comp = new Int32Array(nf).fill(-1);
+  const comps: { side: number; area: number; faces: number[] }[] = [];
+  for (let s = 0; s < nf; s++) {
+    if (comp[s] >= 0) continue;
+    const id = comps.length, side = labels[s];
+    const faces = [s];
+    comp[s] = id;
+    let area = 0;
+    for (let i = 0; i < faces.length; i++) {
+      const f = faces[i];
+      area += fArea[f];
+      for (let j = 0; j < 3; j++) {
+        const g = faceNbr[f * 3 + j];
+        if (g >= 0 && comp[g] < 0 && labels[g] === side) {
+          comp[g] = id;
+          faces.push(g);
+        }
+      }
+    }
+    comps.push({ side, area, faces });
+  }
+  const keep = new Set(seedFaces.map((f) => comp[f]));
+  // The body is the piece of A made of the most detected parts (torso, head, arms…); pieces
+  // that are one part hanging only from B (a hat on a head, feet under a skirt) leave with it.
+  // Size does not decide: a hat can have more surface than the rest of a small figure.
+  let mainA: (typeof comps)[number] | undefined;
+  let best = -1;
+  for (const c of comps) {
+    if (c.side !== 0) continue;
+    const kinds = new Set<number>();
+    for (const f of c.faces) kinds.add(parts[f]);
+    const score = kinds.size * 1e12 + c.area;
+    if (score > best) {
+      best = score;
+      mainA = c;
+    }
+  }
+  for (const [i, c] of comps.entries()) {
+    if (c.side === 1 && !keep.has(i)) for (const f of c.faces) labels[f] = 0;
+    // Whatever the cut would leave hanging in the air goes with B (a hat when the head leaves).
+    else if (c.side === 0 && c !== mainA) for (const f of c.faces) labels[f] = 1;
+  }
+  for (let it = 0; it < 8 && fixPinches(ctx.topo, labels); it++);
+}
+
 /** Builds and validates the two manifolds of a region split. */
 function toSolids(wasm: Wasm, part: Manifold, split: RegionSplit, shell: boolean): { a: Manifold; b: Manifold } {
   const a = meshDataToManifold(wasm, split.a);
@@ -386,6 +635,7 @@ function toSolids(wasm: Wasm, part: Manifold, split: RegionSplit, shell: boolean
  * balls and level on this exact mesh; `ctx` must be built from `part`'s mesh.
  */
 export function cutRegion(wasm: Wasm, part: Manifold, ctx: RegionContext, op: RegionCutOperation): RegionCutResult {
+  if (op.partSeeds?.length) return cutDetectedParts(wasm, part, ctx, op);
   const field = regionField(ctx, op.balls, op.seeds, op.negSeeds);
   const labelsAt = (level: number) => labelFaces(ctx, field, level, Math.max(ctx.edge * 2, Math.min(level * 0.35, ctx.diag * 0.05)));
   const warnings: string[] = [];

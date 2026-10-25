@@ -120,6 +120,11 @@ export interface RegionCutOperation {
   balls: RegionBall[];
   /** Brush/click points that must end up in B. */
   seeds: Vec3[];
+  /**
+   * Cut by detected parts (SmartCut hover): B is every automatic part under these points, from
+   * the part map of the target (recomputed on re-execution). Balls and level are then unused.
+   */
+  partSeeds?: Vec3[];
   /** Points that must stay in A (Shift + brush). */
   negSeeds?: Vec3[];
   /** Geodesic distance (mm) of the ring from the seed region. */

@@ -103,6 +103,7 @@ export function BusyPill() {
 
 export function ToolHint() {
   const tool = useUI((s) => s.tool);
+  const brushAdvanced = useUI((s) => s.brushAdvanced);
   const draft = useUI((s) => s.draft);
   const selection = useUI((s) => s.selection);
   const count = useUI((s) => s.parts.length);
@@ -132,7 +133,7 @@ export function ToolHint() {
     );
   }
   let text: React.ReactNode = null;
-  if (tool === 'brush') text = <>Pincele com o botão esquerdo · gire com o direito · <Kbd>Enter</Kbd> sugere o corte</>;
+  if (tool === 'brush') text = brushAdvanced ? <>Pincele com o botão esquerdo · gire com o direito · <Kbd>Enter</Kbd> sugere o corte</> : <>Passe o mouse sobre uma parte · clique para cortá-la · gire com o botão direito</>;
   else if (tool === 'draw') text = <>Desenhe um traço atravessando a peça · <Kbd>Esc</Kbd> cancela</>;
   else if (draft?.mode === 'surface') text = <><Kbd>Enter</Kbd> corta · <Kbd>Esc</Kbd> cancela</>;
   else if (draft) text = <>Arraste as setas para mover e os arcos para girar · <Kbd>Enter</Kbd> corta · <Kbd>Esc</Kbd> cancela</>;

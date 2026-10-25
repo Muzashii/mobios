@@ -77,3 +77,24 @@ describe('part map', () => {
     expect(partAt([0, -100, 3], [0, 1, 0])).toBe('Base');
   });
 });
+
+describe('cortar por parte detectada', () => {
+  it('a point on the hat cuts off exactly the hat (dome + brim), as two closed solids', async () => {
+    const { Engine } = await import('../../src/geometry/engine');
+    const { meshDataToManifold } = await import('../../src/geometry/repair');
+    const engine = new Engine(wasm);
+    const solid = meshDataToManifold(wasm, figureWithHat());
+    const total = solid.volume();
+    engine.addSource('fig', solid);
+    const top: Vec3 = [0, 0, 117];
+    const r = engine.evaluate([{ id: 'fig', name: 'Figura' }], [
+      { kind: 'cut-region', id: 'c1', target: 'fig', balls: [], seeds: [top], partSeeds: [top], level: 0, mode: 'auto', plane: { origin: [0, 0, 106], normal: [0, 0, 1] } },
+    ]);
+    expect(r.reports.c1.error, r.reports.c1.error).toBeUndefined();
+    const a = r.parts.find((p) => p.id === 'c1.a')!, b = r.parts.find((p) => p.id === 'c1.b')!;
+    expect(b.stats.bounds.min[2]).toBeGreaterThan(102); // nothing of the head below the brim
+    expect(b.stats.bounds.max[0] - b.stats.bounds.min[0]).toBeGreaterThan(36); // the brim came along
+    expect(Math.abs(a.stats.volume + b.stats.volume - total) / total).toBeLessThan(0.01);
+    engine.dispose();
+  });
+});

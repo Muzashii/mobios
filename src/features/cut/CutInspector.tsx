@@ -164,12 +164,13 @@ function RegionCutInspector({ draft }: { draft: CutDraft }) {
   const r = draft.region!;
   const allowsConnector = draftAllowsConnector(draft);
   const base = r.candidates[r.index]?.level ?? r.level;
+  const byParts = !!r.partSeeds?.length;
   return (
     <div className="flex h-full flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto">
         <Section title={draft.editingOpId ? 'Editar corte SmartCut' : 'SmartCut — revisar'} aside={<span className="truncate text-[11px] text-muted">{part?.name}</span>}>
-          <p className="text-[11px] leading-snug text-muted">Laranja = a parte que sai (B). A linha branca é a emenda. Gire a vista para conferir o outro lado.</p>
-          {r.candidates.length > 0 && (
+          <p className="text-[11px] leading-snug text-muted">Laranja = a parte que sai. Gire a vista para conferir o outro lado. <Kbd>Enter</Kbd> corta, <Kbd>Esc</Kbd> cancela.</p>
+          {!byParts && r.candidates.length > 0 && (
             <div className="space-y-1" role="listbox" aria-label="Sugestões">
               {r.candidates.map((c, i) => (
                 <button
@@ -194,6 +195,7 @@ function RegionCutInspector({ draft }: { draft: CutDraft }) {
           )}
           {draft.batch?.length ? <p className="text-[11px] text-accent">+ {draft.batch.length} outra(s) região(ões) pincelada(s) serão cortadas junto.</p> : null}
           <Field label="Nome da parte">{(id) => <input id={id} className="h-7 w-full rounded-md border border-line bg-surface-2 px-2 text-xs" value={r.name} placeholder="Ex.: Cabeça" onChange={(e) => updateRegion({ name: e.target.value })} />}</Field>
+          {!byParts && (
           <Field label="Deslocar ao longo">
             {(id) => (
               <div className="space-y-1.5">
@@ -202,7 +204,16 @@ function RegionCutInspector({ draft }: { draft: CutDraft }) {
               </div>
             )}
           </Field>
+          )}
         </Section>
+        {byParts ? (
+          <Section title="Parte escolhida">
+            <p className="text-[11px] leading-snug text-muted">A emenda vai para o vinco entre as partes. Onde nenhuma tampa cabe (cabelo comprido), o corte segue o meio entre as partes.</p>
+            <Button size="sm" variant="ghost" className="w-full" onClick={() => startBrush(draft.target)}>
+              Escolher outra parte
+            </Button>
+          </Section>
+        ) : (
         <Section title="Como a parte sai">
           <Segmented<RegionCutMode> label="Modo do corte" value={r.mode} onChange={(mode) => updateRegion({ mode })} options={MODES} />
           <p className="text-[11px] leading-snug text-muted">{MODE_HINT[r.mode]}</p>
@@ -220,6 +231,7 @@ function RegionCutInspector({ draft }: { draft: CutDraft }) {
             Pincelar de novo
           </Button>
         </Section>
+        )}
         {allowsConnector && (
           <Section title="Numeração gravada" aside={<Switch label="Numerar faces" checked={draft.label} onChange={(label) => updateDraft({ label })} />}>
             <p className="text-[11px] leading-snug text-muted">Gravada no centro plano da junta, longe dos encaixes.</p>

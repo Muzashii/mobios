@@ -1,9 +1,10 @@
 import { geometry } from '../../geometry/client';
 import { defaultConnectorParams } from '../../geometry/connectors';
-import type { CutHint, CutOperation, CutProfile, Operation, PartId, Plane, RegionCutMode, SmartCutSuggestion, StrokeFrame, Vec2, Vec3 } from '../../geometry/types';
-import { addOperation, batch, insertOperationAfter, removeOperation, updateOperation, type Command } from '../../store/commands';
+import type { CutHint, CutOperation, CutProfile, Operation, PartId, Plane, RegionCutMode, SmartCutCandidate, SmartCutSuggestion, StrokeFrame, Vec2, Vec3 } from '../../geometry/types';
+import { addOperation, batch, insertOperationAfter, removeOperation, resolveMapPart, updateOperation, type Command } from '../../store/commands';
 import { dispatch, getDoc } from '../../store/history';
 import { newId } from '../../store/project';
+import { requestPartMap } from '../../store/partmaps';
 import { toBufferGeometry } from '../../store/sync';
 import { setUI, toast, useUI, type CutDraft, type RegionDraft } from '../../store/ui';
 
@@ -66,9 +67,11 @@ export function startCut(partId?: PartId) {
 
 /** SmartCut: hover shows the part, click/brush picks it, Enter suggests. */
 export function startBrush(partId?: PartId) {
-  const { selection, brush } = useUI.getState();
+  const { selection, brush, parts } = useUI.getState();
   cancelCut();
   const target = partId ?? selection ?? null;
+  // Detected parts drive the hover: compute them for the target (or every visible part).
+  for (const p of target ? [target] : parts.map((x) => x.id)) requestPartMap(p);
   const same = brush.target === target;
   setUI({ tool: 'brush', explode: 0, connectorEdit: null, brush: { ...brush, target, seeds: same ? brush.seeds : [], negSeeds: same ? brush.negSeeds : [] } });
 }
@@ -234,6 +237,7 @@ function regionToOperation(target: PartId, r: RegionDraft, plane: Plane, id: str
     ...(r.negSeeds.length ? { negSeeds: r.negSeeds } : {}),
     level: r.level,
     mode: r.mode,
+    ...(r.partSeeds?.length ? { partSeeds: r.partSeeds } : {}),
     ...(r.mode === 'shell' ? { depth: r.depth } : {}),
     plane,
     ...(r.name ? { name: r.name } : {}),
@@ -418,4 +422,66 @@ export function draftOffsetRange(draft: CutDraft) {
 export function editConnector(opId: string) {
   cancelCut();
   setUI({ connectorEdit: opId, selection: null, tool: 'select' });
+}
+
+/**
+ * SmartCut hover click: cut off the detected part under the cursor (and whatever the user
+ * merged into it). Opens the review with that part highlighted right away; the engine settles
+ * the joint on the nearby crease.
+ */
+export function pickDetectedPart(partId: PartId, point: Vec3, group: number) {
+  const part = useUI.getState().parts.find((p) => p.id === partId);
+  const map = useUI.getState().partMaps[partId]?.result;
+  if (!part || !map) return;
+  const edits = getDoc().partMaps?.[partId] ?? { names: {}, merged: {} };
+  const members = map.parts.filter((p) => resolveMapPart(edits, p.id) === group).map((p) => p.id);
+  const pos = part.geometry.getAttribute('position').array as Float32Array;
+  const inGroup = new Set(members);
+  // One point per member part (merged parts must come along when the history re-runs), a soup
+  // of the group for the immediate highlight, and centroids for a first plane.
+  const seeds: Vec3[] = [point];
+  const seen = new Set<number>([map.labels[nearestFace(pos, point)]]);
+  const soup: number[] = [];
+  const cg: Vec3 = [0, 0, 0], call: Vec3 = [0, 0, 0];
+  let ng = 0, nall = 0;
+  for (let f = 0; f < map.labels.length; f++) {
+    const c = [0, 1, 2].map((k) => (pos[f * 9 + k] + pos[f * 9 + 3 + k] + pos[f * 9 + 6 + k]) / 3) as Vec3;
+    for (let k = 0; k < 3; k++) call[k] += c[k];
+    nall++;
+    const l = map.labels[f];
+    if (!inGroup.has(l)) continue;
+    for (let k = 0; k < 9; k++) soup.push(pos[f * 9 + k]);
+    for (let k = 0; k < 3; k++) cg[k] += c[k];
+    ng++;
+    if (!seen.has(l)) {
+      seen.add(l);
+      seeds.push(c);
+    }
+  }
+  if (!ng) return;
+  const centroid = cg.map((v) => v / ng) as Vec3, whole = call.map((v) => v / nall) as Vec3;
+  const d = [centroid[0] - whole[0], centroid[1] - whole[1], centroid[2] - whole[2]];
+  const len = Math.hypot(d[0], d[1], d[2]) || 1;
+  const normal = [d[0] / len, d[1] / len, d[2] / len] as Vec3;
+  const name = edits.names[group] ?? map.parts.find((p) => p.id === group)?.name ?? 'Parte';
+  const share = members.reduce((s, m) => s + (map.parts.find((p) => p.id === m)?.share ?? 0), 0);
+  const plane = { origin: centroid, normal };
+  const candidate: SmartCutCandidate = { level: 0, plane, radius: 0, loops: [], perimeter: 0, planarity: 0, confidence: 1, kind: 'limb', areaShare: share, preview: Float32Array.from(soup), name };
+  const box = partBounds(partId);
+  const draft = baseDraft(partId, plane, box ? Math.max(...box.size) * 0.3 : 10);
+  draft.mode = 'region';
+  draft.region = { balls: [], seeds, negSeeds: [], candidates: [candidate], index: 0, level: 0, mode: 'surface', depth: 3, name, partSeeds: seeds };
+  setDraft(draft, { tool: 'cut', selection: partId, hover: null, mapHover: null });
+}
+
+function nearestFace(pos: Float32Array, p: Vec3): number {
+  let best = 0, bd = Infinity;
+  for (let f = 0; f < pos.length / 9; f++) {
+    const d = (pos[f * 9] - p[0]) ** 2 + (pos[f * 9 + 1] - p[1]) ** 2 + (pos[f * 9 + 2] - p[2]) ** 2;
+    if (d < bd) {
+      bd = d;
+      best = f;
+    }
+  }
+  return best;
 }

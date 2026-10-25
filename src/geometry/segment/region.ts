@@ -1,5 +1,5 @@
 import { MeshQuery } from '../mesh/bvh';
-import { buildTopology, DisjointSet, edgeFold, geodesic, type Topology } from '../mesh/topology';
+import { buildTopology, DisjointSet, edgeFold, geodesic, MinHeap, type Topology } from '../mesh/topology';
 import type { MeshData, Plane, RegionBall, RegionKind, Vec3 } from '../types';
 import { FlowGraph } from './mincut';
 
@@ -463,7 +463,7 @@ export function sideAtLevel(ctx: RegionContext, field: Field, level: number): Ui
 }
 
 /** Dual-edge cost: cheap across concave creases (necks) and, less, sharp ridges (hems, seams). */
-function edgeCost(topo: Topology, f: number, k: number) {
+export function edgeCost(topo: Topology, f: number, k: number) {
   const { p, t } = topo;
   const a = t[f * 3 + k], b = t[f * 3 + (k + 1) % 3];
   const len = Math.hypot(p[a * 3] - p[b * 3], p[a * 3 + 1] - p[b * 3 + 1], p[a * 3 + 2] - p[b * 3 + 2]);
@@ -524,6 +524,65 @@ export function labelFaces(ctx: RegionContext, field: Field, level: number, band
   cleanLabels(topo, labels, field);
   for (let it = 0; it < 6 && fixPinches(topo, labels); it++) cleanLabels(topo, labels, field);
   return labels;
+}
+
+/**
+ * Moves a rough border (e.g. carried from the part map) onto the cheapest closed line nearby:
+ * min cut inside a band of ±`band` mm along the surface around it, where crossing a concave
+ * crease costs little (neck, armpit, under a brim). Faces deeper than the band keep their side.
+ */
+export function snapToCreases(topo: Topology, labels: Uint8Array, band: number): Uint8Array {
+  const { nf, faceNbr, p, t } = topo;
+  const cen = (f: number, k: number) => (p[t[f * 3] * 3 + k] + p[t[f * 3 + 1] * 3 + k] + p[t[f * 3 + 2] * 3 + k]) / 3;
+  // Surface distance from the border (face to face).
+  const d = new Float64Array(nf).fill(Infinity);
+  const heap = new MinHeap(1024);
+  for (let f = 0; f < nf; f++)
+    for (let k = 0; k < 3; k++) {
+      const g = faceNbr[f * 3 + k];
+      if (g >= 0 && labels[g] !== labels[f]) {
+        d[f] = 0;
+        heap.push(f, 0);
+        break;
+      }
+    }
+  while (heap.size) {
+    const key = heap.topKey();
+    const f = heap.pop();
+    if (key > d[f] || key > band) continue;
+    for (let k = 0; k < 3; k++) {
+      const g = faceNbr[f * 3 + k];
+      if (g < 0) continue;
+      const nd = key + Math.hypot(cen(f, 0) - cen(g, 0), cen(f, 1) - cen(g, 1), cen(f, 2) - cen(g, 2));
+      if (nd < d[g]) {
+        d[g] = nd;
+        heap.push(g, nd);
+      }
+    }
+  }
+  const idx = new Int32Array(nf).fill(-1);
+  const nodes: number[] = [];
+  for (let f = 0; f < nf; f++) if (d[f] <= band) { idx[f] = nodes.length; nodes.push(f); }
+  const out = Uint8Array.from(labels);
+  if (!nodes.length) return out;
+  const S = nodes.length, T = nodes.length + 1;
+  const g = new FlowGraph(nodes.length + 2);
+  for (const f of nodes) {
+    const u = idx[f];
+    for (let k = 0; k < 3; k++) {
+      const h = faceNbr[f * 3 + k];
+      if (h < 0) continue;
+      const c = edgeCost(topo, f, k);
+      if (idx[h] >= 0) {
+        if (h > f) g.addEdge(u, idx[h], c);
+      } else if (labels[h]) g.addEdge(S, u, c, 0);
+      else g.addEdge(u, T, c, 0);
+    }
+  }
+  g.maxflow(S, T);
+  const reach = g.sourceSide(S);
+  for (const f of nodes) out[f] = reach[idx[f]] ? 1 : 0;
+  return out;
 }
 
 /**
